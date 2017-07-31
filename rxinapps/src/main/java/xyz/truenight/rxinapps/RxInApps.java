@@ -1,0 +1,580 @@
+/**
+ * Copyright (C) 2017 Mikhail Frolov
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package xyz.truenight.rxinapps;
+
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.support.annotation.NonNull;
+
+import com.android.vending.billing.IInAppBillingService;
+import com.orhanobut.hawk.HawkBuilder;
+import com.orhanobut.hawk.HawkFacade;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import rx.Observable;
+import rx.Subscriber;
+import rx.functions.Action0;
+import rx.functions.Action1;
+import rx.functions.Func0;
+import rx.functions.Func1;
+import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.hawk.CachedHawkFacade;
+import xyz.truenight.rxinapps.hawk.SharedPreferencesStorage;
+import xyz.truenight.rxinapps.model.ProductType;
+import xyz.truenight.rxinapps.model.Purchase;
+import xyz.truenight.rxinapps.model.SkuDetails;
+import xyz.truenight.rxinapps.util.Constants;
+import xyz.truenight.rxinapps.util.GsonParser;
+import xyz.truenight.rxinapps.util.Parser;
+import xyz.truenight.rxinapps.util.RxUtils;
+import xyz.truenight.rxinapps.util.Security;
+import xyz.truenight.utils.Utils;
+
+public class RxInApps extends ContextHolder {
+
+    static final String TAG = RxInApps.class.getSimpleName();
+    private static final String VERSION = "v1";
+    private static final String STORAGE_TAG = TAG + VERSION;
+    private static final String LAST_LOAD = ":LAST_LOAD";
+
+    private static final Date DATE_MERCHANT_LIMIT_1 = new Date(2012, 12, 5); //5th December 2012
+    private static final Date DATE_MERCHANT_LIMIT_2 = new Date(2015, 7, 20); //21st July 2015
+
+    private static String licenseKey;
+    private static String merchantId;
+    private static RxInApps instance;
+
+    public static void init(Builder builder) {
+        instance = new RxInApps(builder);
+        licenseKey = builder.getLicenseKey();
+        merchantId = builder.getMerchantId();
+    }
+
+    public static synchronized RxInApps with(Context context) {
+        if (instance == null) {
+            instance = new RxInApps(new Builder(context));
+        }
+        return instance;
+    }
+
+
+    private final String packageName;
+    private final HawkFacade hawk;
+    private final long timeout; // timeout seconds
+    private final long cacheLifetime;
+    private final Parser parser;
+
+    private final AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber = new AtomicReference<>();
+
+    private RxInApps(Builder builder) {
+        super(builder.getContext());
+        this.timeout = builder.getTimeout();
+        this.cacheLifetime = builder.getCacheLifetime();
+        this.parser = builder.getParser();
+        this.packageName = getContext().getApplicationContext().getPackageName();
+        // TODO: make caching optional
+        this.hawk = new CachedHawkFacade(new HawkBuilder(getContext())
+                .setStorage(new SharedPreferencesStorage(getContext(), STORAGE_TAG)));
+    }
+
+    Parser getParser() {
+        return parser;
+    }
+
+    HawkFacade getStorage() {
+        return hawk;
+    }
+
+    public static boolean isIabServiceAvailable(Context context) {
+        final PackageManager packageManager = context.getPackageManager();
+        final Intent intent = new Intent(Constants.BINDING_INTENT_VALUE);
+        List<ResolveInfo> list = packageManager.queryIntentServices(intent, 0);
+        return list.size() > 0;
+    }
+
+    public static boolean isValid(Purchase purchase) {
+        return verifyPurchaseSignature(purchase.getProductId(),
+                purchase.getRawResponse(),
+                purchase.getPurchaseSignature()) && checkMerchantTransactionDetails(purchase);
+    }
+
+    static boolean verifyPurchaseSignature(String productId, String purchaseData, String dataSignature) {
+        try {
+            /*
+             * Skip the signature check if the provided License Key is NULL and return true in order to
+             * continue the purchase flow
+             */
+            return Utils.isEmpty(licenseKey) || Security.verifyPurchase(productId, licenseKey, purchaseData, dataSignature);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Checks merchant's id validity. If purchase was generated by Freedom alike program it doesn't know
+     * real merchant id, unless publisher GoogleId was hacked
+     * If merchantId was not supplied function checks nothing
+     *
+     * @param details TransactionDetails
+     * @return boolean
+     */
+    static boolean checkMerchantTransactionDetails(Purchase details) {
+        if (RxInApps.merchantId == null) {//omit merchant id checking
+            return true;
+        }
+        if (details.getPurchaseTime().before(DATE_MERCHANT_LIMIT_1)) {//new format [merchantId].[orderId] applied or not?
+            return true;
+        }
+        if (details.getPurchaseTime().after(DATE_MERCHANT_LIMIT_2)) {//newest format applied
+            return true;
+        }
+        if (details.getOrderId() == null || details.getOrderId().trim().length() == 0) {
+            return false;
+        }
+        int index = details.getOrderId().indexOf('.');
+        if (index <= 0) {
+            return false; //protect on missing merchant id
+        }
+        //extract merchant id
+        String merchantId = details.getOrderId().substring(0, index);
+        return merchantId.compareTo(RxInApps.merchantId) == 0;
+    }
+
+    public Observable<IInAppBillingService> initialization() {
+        return Observable.unsafeCreate(ConnectionOnSubscribe.create(RxInApps.this))
+                .take(timeout, TimeUnit.MILLISECONDS);
+    }
+
+    Observable<List<Purchase>> loadPurchasesByType(final String productType) {
+        return initialization()
+                .flatMap(new Func1<IInAppBillingService, Observable<List<Purchase>>>() {
+                    @Override
+                    public Observable<List<Purchase>> call(final IInAppBillingService billingService) {
+                        return loadPurchasesByType(billingService, productType);
+                    }
+                });
+    }
+
+    Observable<List<Purchase>> loadPurchasesByType(IInAppBillingService billingService, String productType) {
+        return Observable.unsafeCreate(PurchasedOnSubscribe.create(billingService, packageName, parser, productType));
+    }
+
+    private Observable<Map<String, Purchase>> purchasesByTypeMap(final String productType) {
+        return Observable.defer(new Func0<Observable<Map<String, Purchase>>>() {
+            @Override
+            public Observable<Map<String, Purchase>> call() {
+                Long lastLoad = hawk.get(productType + LAST_LOAD);
+                long delta = Utils.safe(lastLoad) + cacheLifetime - System.currentTimeMillis();
+                if (delta >= 0 && delta <= cacheLifetime) {
+                    Map<String, Purchase> map = hawk.get(productType);
+                    if (map != null) {
+                        return Observable.just(map);
+                    }
+                }
+                return loadPurchasesByType(productType)
+                        .compose(toMapAndCache(productType));
+
+            }
+        });
+    }
+
+    @NonNull
+    Observable.Transformer<List<Purchase>, Map<String, Purchase>> toMapAndCache(final String productType) {
+        return new Observable.Transformer<List<Purchase>, Map<String, Purchase>>() {
+            @Override
+            public Observable<Map<String, Purchase>> call(Observable<List<Purchase>> listObservable) {
+                return listObservable
+                        .flatMap(new Func1<List<Purchase>, Observable<Purchase>>() {
+                            @Override
+                            public Observable<Purchase> call(List<Purchase> purchases) {
+                                return Observable.from(purchases);
+                            }
+                        })
+                        .toMap(new Func1<Purchase, String>() {
+                            @Override
+                            public String call(Purchase purchases) {
+                                return purchases.getProductId();
+                            }
+                        })
+                        .doOnNext(new Action1<Map<String, Purchase>>() {
+                            @Override
+                            public void call(Map<String, Purchase> map) {
+                                hawk.put(productType, map);
+                                hawk.put(productType + LAST_LOAD, System.currentTimeMillis());
+                            }
+                        });
+            }
+        };
+    }
+
+    void putPurchaseToCache(Purchase purchase, String productType) {
+        Map<String, Purchase> map = hawk.get(productType);
+        map.put(purchase.getProductId(), purchase);
+        hawk.put(productType, map);
+    }
+
+    void removePurchaseFromCache(String productId, String productType) {
+        Map<String, Purchase> map = hawk.get(productType);
+        map.remove(productId);
+        hawk.put(productType, map);
+    }
+
+    private Observable<Purchase> purchase(final String productId, final String productType) {
+        return Observable.defer(new Func0<Observable<Purchase>>() {
+            @Override
+            public Observable<Purchase> call() {
+                if (Utils.isEmpty(productId)) {
+                    return Observable.error(new IllegalArgumentException("Product id can't be empty"));
+                }
+                return initialization()
+                        .flatMap(new Func1<IInAppBillingService, Observable<Purchase>>() {
+                            @Override
+                            public Observable<Purchase> call(final IInAppBillingService billingService) {
+                                return Observable.unsafeCreate(PurchaseOnSubscribe.create(RxInApps.this, billingService, packageName, productId, productType, purchaseSubscriber));
+                            }
+                        })
+                        .doOnUnsubscribe(new Action0() {
+                            @Override
+                            public void call() {
+                                purchaseSubscriber.set(null);
+                            }
+                        });
+            }
+        });
+    }
+
+    void deliverPurchaseResult(Purchase purchase) {
+        RxUtils.publishResult(Utils.unwrap(purchaseSubscriber), purchase);
+    }
+
+    void deliverPurchaseError(Throwable th) {
+        RxUtils.publishError(Utils.unwrap(purchaseSubscriber), th);
+    }
+
+    /**
+     * Returns {@link Observable} which emits {@link SkuDetails} of specified type
+     */
+    private Observable<SkuDetails> getSkuDetails(final String productId, final String productType) {
+        return getSkuDetails(Collections.singletonList(productId), productType)
+                .map(new Func1<List<SkuDetails>, SkuDetails>() {
+                    @Override
+                    public SkuDetails call(List<SkuDetails> data) {
+                        return Utils.first(data);
+                    }
+                });
+    }
+
+    /**
+     * Returns {@link Observable} which emits list of {@link SkuDetails} of specified type
+     */
+    private Observable<List<SkuDetails>> getSkuDetails(final List<String> productIdList, final String productType) {
+        return Observable.defer(new Func0<Observable<List<SkuDetails>>>() {
+            @Override
+            public Observable<List<SkuDetails>> call() {
+                if (Utils.isEmpty(productIdList)) {
+                    return Observable.error(new NullPointerException("Product id list can't be empty"));
+                }
+                return initialization()
+                        .flatMap(new Func1<IInAppBillingService, Observable<List<SkuDetails>>>() {
+                            @Override
+                            public Observable<List<SkuDetails>> call(final IInAppBillingService billingService) {
+                                return Observable.unsafeCreate(new SkuDetailsOnSubscribe(billingService, packageName, parser, productIdList, productType));
+                            }
+                        });
+            }
+        });
+    }
+
+    /*
+     * ----------------------------------------- PRODUCTS ------------------------------------------
+     */
+
+    public Observable<List<Purchase>> loadPurchasedProducts() {
+        return loadPurchasesByType(ProductType.MANAGED);
+    }
+
+    public Observable<Map<String, Purchase>> purchasedProductsMap() {
+        return purchasesByTypeMap(ProductType.MANAGED);
+    }
+
+    public Observable<List<Purchase>> purchasedProducts() {
+        return purchasedProductsMap()
+                .map(new Func1<Map<String, Purchase>, List<Purchase>>() {
+                    @Override
+                    public List<Purchase> call(Map<String, Purchase> map) {
+                        return new ArrayList<>(map.values());
+                    }
+                });
+    }
+
+    public Observable<List<String>> purchasedProductIds() {
+        return purchasedProductsMap()
+                .map(new Func1<Map<String, Purchase>, List<String>>() {
+                    @Override
+                    public List<String> call(Map<String, Purchase> map) {
+                        return new ArrayList<>(map.keySet());
+                    }
+                });
+    }
+
+    public Observable<Boolean> isPurchased(final String productId) {
+        return purchasedProductsMap()
+                .map(new Func1<Map<String, Purchase>, Boolean>() {
+                    @Override
+                    public Boolean call(Map<String, Purchase> data) {
+                        return data.containsKey(productId);
+                    }
+                });
+    }
+
+    public Observable<Purchase> getPurchasedProduct(final String productId) {
+        return purchasedProductsMap()
+                .map(new Func1<Map<String, Purchase>, Purchase>() {
+                    @Override
+                    public Purchase call(Map<String, Purchase> data) {
+                        if (data.containsKey(productId)) {
+                            return data.get(productId);
+                        } else {
+                            throw new InAppBillingException(String.format("Product with %s not found", productId));
+                        }
+                    }
+                });
+    }
+
+    public Observable<Purchase> purchase(String productId) {
+        return purchase(productId, ProductType.MANAGED);
+    }
+
+    public Observable<Purchase> consume(final String productId) {
+        return Observable.defer(new Func0<Observable<Purchase>>() {
+            @Override
+            public Observable<Purchase> call() {
+                if (Utils.isEmpty(productId)) {
+                    return Observable.error(new IllegalArgumentException("Product id can't be empty"));
+                }
+                return initialization()
+                        .flatMap(new Func1<IInAppBillingService, Observable<Purchase>>() {
+                            @Override
+                            public Observable<Purchase> call(final IInAppBillingService billingService) {
+                                return loadPurchasesByType(billingService, ProductType.MANAGED)
+                                        .compose(toMapAndCache(ProductType.MANAGED))
+                                        .flatMap(new Func1<Map<String, Purchase>, Observable<Purchase>>() {
+                                            @Override
+                                            public Observable<Purchase> call(final Map<String, Purchase> map) {
+                                                return Observable.unsafeCreate(
+                                                        ConsumePurchaseOnSubscribe.create(
+                                                                RxInApps.this,
+                                                                billingService,
+                                                                packageName,
+                                                                map,
+                                                                productId
+                                                        )
+                                                );
+                                            }
+                                        });
+                            }
+                        });
+            }
+        });
+    }
+
+    public Observable<SkuDetails> getProduct(String productId) {
+        return getSkuDetails(productId, ProductType.MANAGED);
+    }
+
+    public Observable<List<SkuDetails>> getProducts(List<String> productIdList) {
+        return getSkuDetails(productIdList, ProductType.MANAGED);
+    }
+
+    /*
+     * --------------------------------------- SUBSCRIPTIONS ---------------------------------------
+     */
+
+    public Observable<List<Purchase>> loadPurchasedSubscriptions() {
+        return loadPurchasesByType(ProductType.SUBSCRIPTION);
+    }
+
+    public Observable<Map<String, Purchase>> purchasedSubscriptionsMap() {
+        return purchasesByTypeMap(ProductType.SUBSCRIPTION);
+    }
+
+    public Observable<List<Purchase>> purchasedSubscriptions() {
+        return purchasedSubscriptionsMap()
+                .map(new Func1<Map<String, Purchase>, List<Purchase>>() {
+                    @Override
+                    public List<Purchase> call(Map<String, Purchase> map) {
+                        return new ArrayList<>(map.values());
+                    }
+                });
+    }
+
+    public Observable<List<String>> purchasedSubscriptionIds() {
+        return purchasedSubscriptionsMap()
+                .map(new Func1<Map<String, Purchase>, List<String>>() {
+                    @Override
+                    public List<String> call(Map<String, Purchase> map) {
+                        return new ArrayList<>(map.keySet());
+                    }
+                });
+    }
+
+    public Observable<Boolean> isSubscribed(final String productId) {
+        return purchasedSubscriptionsMap()
+                .map(new Func1<Map<String, Purchase>, Boolean>() {
+                    @Override
+                    public Boolean call(Map<String, Purchase> data) {
+                        return data.containsKey(productId);
+                    }
+                });
+    }
+
+    public Observable<Purchase> getPurchasedSubscription(final String productId) {
+        return purchasedSubscriptionsMap()
+                .map(new Func1<Map<String, Purchase>, Purchase>() {
+                    @Override
+                    public Purchase call(Map<String, Purchase> data) {
+                        if (data.containsKey(productId)) {
+                            return data.get(productId);
+                        } else {
+                            throw new InAppBillingException(String.format("Product with %s not found", productId));
+                        }
+                    }
+                });
+    }
+
+    public Observable<Purchase> subscribe(String productId) {
+        return purchase(productId, ProductType.SUBSCRIPTION);
+    }
+
+    public Observable<SkuDetails> getSubscription(String productId) {
+        return getSkuDetails(productId, ProductType.SUBSCRIPTION);
+    }
+
+    public Observable<List<SkuDetails>> getSubscriptions(List<String> productIdList) {
+        return getSkuDetails(productIdList, ProductType.SUBSCRIPTION);
+    }
+
+    public boolean checkPurchaseSubscriber() {
+        return !RxUtils.isUnsubscribed(Utils.unwrap(purchaseSubscriber));
+    }
+
+
+    public static class Builder {
+        private Context context;
+        private Parser parser;
+        private String licenseKey;
+        private String merchantId;
+
+        private Long timeout; // timeout seconds
+        private Long cacheLifetime; // timeout seconds
+
+        public Builder(Context context) {
+            this.context = context;
+        }
+
+        Context getContext() {
+            return context;
+        }
+
+        Parser getParser() {
+            if (parser == null) {
+                return new GsonParser();
+            } else {
+                return parser;
+            }
+        }
+
+        String getLicenseKey() {
+            return licenseKey;
+        }
+
+        String getMerchantId() {
+            return merchantId;
+        }
+
+        Long getTimeout() {
+            if (timeout == null) {
+                return TimeUnit.SECONDS.toMillis(5);
+            } else {
+                return timeout;
+            }
+        }
+
+        Long getCacheLifetime() {
+            if (cacheLifetime == null) {
+                return TimeUnit.MINUTES.toMillis(30);
+            } else {
+                return cacheLifetime;
+            }
+        }
+
+        /**
+         * Parser for {@link SkuDetails} and {@link Purchase} data models
+         */
+        public Builder parser(Parser parser) {
+            this.parser = parser;
+            return this;
+        }
+
+        // TODO: add log interceptor
+
+        /**
+         * Necessary for simple validation of purchases
+         *
+         * @param licenseKey license key
+         */
+        public Builder licenseKey(String licenseKey) {
+            this.licenseKey = licenseKey;
+            return this;
+        }
+
+        /**
+         * Necessary for simple validation of purchases
+         *
+         * @param merchantId google merchant id
+         */
+        public Builder merchantId(String merchantId) {
+            this.merchantId = merchantId;
+            return this;
+        }
+
+        /**
+         * Timeout for {@link IInAppBillingService} initialization
+         */
+        public Builder timeout(long value, TimeUnit timeUnit) {
+            this.timeout = timeUnit.toMillis(value);
+            return this;
+        }
+
+        /**
+         * Lifetime of purchases cache
+         */
+        public Builder cacheLifetime(long value, TimeUnit timeUnit) {
+            this.cacheLifetime = timeUnit.toMillis(value);
+            return this;
+        }
+    }
+}
