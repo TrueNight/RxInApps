@@ -26,11 +26,10 @@ import java.util.List;
 
 import rx.Observable;
 import rx.Subscriber;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.LoadFailedException;
 import xyz.truenight.rxinapps.model.SkuDetails;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.Parser;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.utils.Utils;
 
 class SkuDetailsOnSubscribe implements Observable.OnSubscribe<List<SkuDetails>> {
@@ -72,7 +71,7 @@ class SkuDetailsOnSubscribe implements Observable.OnSubscribe<List<SkuDetails>> 
                         }
                     }
                 } else {
-                    throw new InAppBillingException("Failed to get sku details: RESPONSE_CODE=" + response);
+                    throw new LoadFailedException("Failed to get sku details: RESPONSE_CODE=" + response);
                 }
             }
             RxUtils.publishResult(subscriber, skuDetails);

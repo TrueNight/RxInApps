@@ -26,70 +26,142 @@ import android.util.Log;
 
 import com.android.vending.billing.IInAppBillingService;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import rx.Observable;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action0;
+import rx.functions.Action1;
+import rx.functions.Func1;
+import rx.subjects.PublishSubject;
+import rx.subjects.Subject;
 import rx.subscriptions.Subscriptions;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.InitializationException;
 import xyz.truenight.rxinapps.util.Constants;
-import xyz.truenight.rxinapps.util.RxUtils;
 
 class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingService> {
 
     private static final String TAG = RxInApps.TAG;
 
-    private Semaphore semaphore = new Semaphore(0);
     private final RxInApps context;
 
+    private AtomicInteger count = new AtomicInteger();
     private AtomicReference<IInAppBillingService> ref = new AtomicReference<>();
+    private List<Runnable> publishers = new CopyOnWriteArrayList<>();
 
-    public static ConnectionOnSubscribe create(final RxInApps context) {
-        return new ConnectionOnSubscribe(context);
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            Log.d(TAG, "onServiceConnected");
+            ref.set(IInAppBillingService.Stub.asInterface(iBinder));
+            for (Runnable publisher : publishers) {
+                publisher.run();
+                publishers.remove(publisher);
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            Log.d(TAG, "onServiceDisconnected");
+            ref.set(null);
+        }
+    };
+    private final Subject<Context, Context> unbindPublisher = PublishSubject.<Context>create().toSerialized();
+    private final Observable<Context> unbindObservable;
+    private Subscription unbindSub;
+
+    public static ConnectionOnSubscribe create(final RxInApps context, long timeout) {
+        return new ConnectionOnSubscribe(context, timeout);
     }
 
-    private ConnectionOnSubscribe(RxInApps context) {
+    private ConnectionOnSubscribe(RxInApps context, long timeout) {
         this.context = context;
+        unbindObservable = unbindPublisher
+                .debounce(timeout, TimeUnit.MILLISECONDS)
+                .filter(new Func1<Context, Boolean>() {
+                    @Override
+                    public Boolean call(Context context) {
+                        return count.get() == 0;
+                    }
+                })
+                .takeWhile(new Func1<Context, Boolean>() {
+                    @Override
+                    public Boolean call(Context context) {
+                        return ref.get() != null;
+                    }
+                });
     }
 
     @Override
     public void call(final Subscriber<? super IInAppBillingService> subscriber) {
+
+        count.incrementAndGet();
+        Log.d(TAG, "Subscribed; count=" + count.get());
+        if (ref.get() != null) {
+            RxUtils.publishResult(subscriber, ref.get());
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    enqueueUnbindService();
+                }
+            }));
+            return;
+        }
+
         final boolean mainThread = isMainThread();
-        Log.d(TAG, "Created new service connection");
-        final ServiceConnection serviceConnection = new ServiceConnection() {
+
+        final Semaphore semaphore = mainThread ? null : new Semaphore(0);
+
+        final Runnable runnable = new Runnable() {
             @Override
-            public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-                Log.d(TAG, "onServiceConnected");
-                ref.set(IInAppBillingService.Stub.asInterface(iBinder));
+            public void run() {
                 if (mainThread) {
                     RxUtils.publishResult(subscriber, ref.get());
                 } else {
                     semaphore.release();
                 }
             }
-
-            @Override
-            public void onServiceDisconnected(ComponentName componentName) {
-                Log.d(TAG, "onServiceDisconnected");
-            }
         };
-        try {
-            Intent iapIntent = new Intent(Constants.BINDING_INTENT_VALUE);
-            iapIntent.setPackage(Constants.VENDING_INTENT_PACKAGE);
+        publishers.add(runnable);
 
-            context.getContext().bindService(iapIntent, serviceConnection, Context.BIND_AUTO_CREATE);
-        } catch (Exception e) {
-            subscriber.onError(new InAppBillingException("Can NOT initialize InAppBillingService", e));
-            return;
+        if (count.get() == 1) {
+
+            Log.d(TAG, "Created new service connection");
+            try {
+                context.getContext().bindService(new Intent(Constants.BINDING_INTENT_VALUE)
+                        .setPackage(Constants.VENDING_INTENT_PACKAGE), serviceConnection, Context.BIND_AUTO_CREATE);
+            } catch (Exception e) {
+                subscriber.onError(new InitializationException("Can NOT initialize InAppBillingService", e));
+                return;
+            }
+
+            unbindSub = unbindObservable.subscribe(new Action1<Context>() {
+                @Override
+                public void call(Context context) {
+                    if (ref.get() != null) {
+                        ref.set(null);
+                        context.unbindService(serviceConnection);
+                        Log.d(TAG, "Disconnected from service");
+                        if (unbindSub != null) {
+                            unbindSub.unsubscribe();
+                            unbindSub = null;
+                        }
+                    }
+                }
+            });
         }
 
         subscriber.add(Subscriptions.create(new Action0() {
             @Override
             public void call() {
-                context.getContext().unbindService(serviceConnection);
-                Log.d(TAG, "unbindService");
+                enqueueUnbindService();
             }
         }));
 
@@ -97,8 +169,12 @@ class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingServi
             semaphore.acquireUninterruptibly();
             RxUtils.publishResult(subscriber, ref.get());
         }
+    }
 
-
+    private void enqueueUnbindService() {
+        count.decrementAndGet();
+        Log.d(TAG, "Unsubscribed; count=" + count.get());
+        unbindPublisher.onNext(context.getContext());
     }
 
     private boolean isMainThread() {

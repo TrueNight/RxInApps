@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package xyz.truenight.rxinapps.util;
+package xyz.truenight.rxinapps;
 
 import rx.Subscriber;
 
-public class RxUtils {
+class RxUtils {
     private RxUtils() {
     }
 

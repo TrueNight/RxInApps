@@ -40,7 +40,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.ProductNotFoundException;
 import xyz.truenight.rxinapps.hawk.CachedHawkFacade;
 import xyz.truenight.rxinapps.hawk.SharedPreferencesStorage;
 import xyz.truenight.rxinapps.model.ProductType;
@@ -49,7 +49,6 @@ import xyz.truenight.rxinapps.model.SkuDetails;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.GsonParser;
 import xyz.truenight.rxinapps.util.Parser;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.rxinapps.util.Security;
 import xyz.truenight.utils.Utils;
 
@@ -86,6 +85,7 @@ public class RxInApps extends ContextHolder {
     private final long timeout; // timeout seconds
     private final long cacheLifetime;
     private final Parser parser;
+    private final ConnectionOnSubscribe connection;
 
     private final AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber = new AtomicReference<>();
 
@@ -95,6 +95,8 @@ public class RxInApps extends ContextHolder {
         this.cacheLifetime = builder.getCacheLifetime();
         this.parser = builder.getParser();
         this.packageName = getContext().getApplicationContext().getPackageName();
+
+        this.connection = ConnectionOnSubscribe.create(RxInApps.this, timeout);
         // TODO: make caching optional
         this.hawk = new CachedHawkFacade(new HawkBuilder(getContext())
                 .setStorage(new SharedPreferencesStorage(getContext(), STORAGE_TAG)));
@@ -173,11 +175,13 @@ public class RxInApps extends ContextHolder {
     }
 
     /**
-     * Observable which emits {@link IInAppBillingService} while this service is bound
+     * Observable which emits InAppBillingService while this service is bound
      */
     public Observable<IInAppBillingService> initialization() {
-        return Observable.unsafeCreate(ConnectionOnSubscribe.create(RxInApps.this))
-                .take(timeout, TimeUnit.MILLISECONDS);
+        // cache instance during timeout
+        return Observable.unsafeCreate(connection)
+                .take(timeout, TimeUnit.MILLISECONDS)
+                .first();
     }
 
     Observable<List<Purchase>> loadPurchasesByType(final String productType) {
@@ -392,7 +396,7 @@ public class RxInApps extends ContextHolder {
                         if (data.containsKey(productId)) {
                             return data.get(productId);
                         } else {
-                            throw new InAppBillingException(String.format("Product with %s not found", productId));
+                            throw new ProductNotFoundException(String.format("Product \"%s\" not found!", productId));
                         }
                     }
                 });
@@ -523,7 +527,7 @@ public class RxInApps extends ContextHolder {
                         if (data.containsKey(productId)) {
                             return data.get(productId);
                         } else {
-                            throw new InAppBillingException(String.format("Product with %s not found", productId));
+                            throw new ProductNotFoundException(String.format("Subscription \"%s\" not found!", productId));
                         }
                     }
                 });
@@ -561,7 +565,7 @@ public class RxInApps extends ContextHolder {
         private Long cacheLifetime; // timeout seconds
 
         public Builder(Context context) {
-            this.context = context;
+            this.context = context.getApplicationContext();
         }
 
         Context getContext() {
@@ -586,7 +590,7 @@ public class RxInApps extends ContextHolder {
 
         Long getTimeout() {
             if (timeout == null) {
-                return TimeUnit.SECONDS.toMillis(5);
+                return TimeUnit.SECONDS.toMillis(10);
             } else {
                 return timeout;
             }
@@ -631,7 +635,7 @@ public class RxInApps extends ContextHolder {
         }
 
         /**
-         * Timeout for {@link IInAppBillingService} initialization
+         * Timeout for InAppBillingService initialization
          */
         public Builder timeout(long value, TimeUnit timeUnit) {
             this.timeout = timeUnit.toMillis(value);

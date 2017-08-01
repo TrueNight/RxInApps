@@ -29,12 +29,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import rx.Observable;
 import rx.Subscriber;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
 import xyz.truenight.rxinapps.exception.MerchantIdException;
+import xyz.truenight.rxinapps.exception.PurchaseFailedException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.utils.Utils;
 
 /**
@@ -89,15 +88,13 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     PendingIntent pendingIntent = bundle.getParcelable(Constants.BUY_INTENT);
 
                     if (pendingIntent != null) {
-                        // todo start hidden flow
                         Context context = this.context.getContext();
                         context.startActivity(new Intent(context, HiddenActivity.class)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 .putExtra(Constants.BUY_INTENT, pendingIntent)
                                 .putExtra(Constants.PURCHASE_PAYLOAD, purchasePayload));
-//                                                        activity.startIntentSenderForResult(pendingIntent.getIntentSender(),
-//                                                                PURCHASE_FLOW_REQUEST_CODE, new Intent(), 0, 0, 0);
                     } else {
-                        throw new InAppBillingException(new NullPointerException("Buy intent is NULL"));
+                        throw new PurchaseFailedException(new NullPointerException("Buy intent is NULL"));
                     }
                 } else if (response == Constants.RESULT_ITEM_ALREADY_OWNED) {
 
@@ -121,10 +118,10 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     purchase.setRestored(true);
                     RxUtils.publishResult(subscriber, purchase);
                 } else {
-                    throw new InAppBillingException("Failed to purchase: RESPONSE_CODE=" + response);
+                    throw new PurchaseFailedException("Failed to purchase: RESPONSE_CODE=" + response);
                 }
             } else {
-                throw new InAppBillingException("Bundle is NULL");
+                throw new PurchaseFailedException(new NullPointerException("Bundle is NULL"));
             }
         } catch (Exception e) {
             RxUtils.publishError(subscriber, e);

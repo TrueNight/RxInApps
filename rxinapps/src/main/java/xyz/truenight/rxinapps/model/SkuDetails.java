@@ -97,7 +97,7 @@ public class SkuDetails {
             NumberFormat formatter = NumberFormat.getNumberInstance();
             formatter.setMinimumFractionDigits(0);
             formatter.setMaximumFractionDigits(2);
-            return formatter.format(getPriceValue()) + " \u20BD"; // "₽" symbol
+            return formatter.format(getPriceValue()) + " \u20BD";
         } else {
             NumberFormat formatter = NumberFormat.getCurrencyInstance();
             formatter.setCurrency(Currency.getInstance(currency));

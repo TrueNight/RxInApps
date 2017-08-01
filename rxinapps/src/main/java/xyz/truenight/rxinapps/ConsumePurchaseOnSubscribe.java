@@ -25,11 +25,11 @@ import java.util.Map;
 
 import rx.Observable;
 import rx.Subscriber;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.ConsumeFailedException;
+import xyz.truenight.rxinapps.exception.ProductNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.utils.Utils;
 
 class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
@@ -74,10 +74,10 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     Log.d(TAG, "Successfully consumed " + productId + " purchase.");
                     RxUtils.publishResult(subscriber, purchase);
                 } else {
-                    throw new InAppBillingException(String.format(Locale.getDefault(),"Failed to consume %s: RESPONSE_CODE=%d", productId, response));
+                    throw new ConsumeFailedException(String.format(Locale.getDefault(), "Failed to consume %s: RESPONSE_CODE=%d", productId, response));
                 }
             } else {
-                throw new InAppBillingException("Product not found");
+                throw new ProductNotFoundException("Purchase for consuming not found");
             }
         } catch (Exception e) {
             RxUtils.publishError(subscriber, e);

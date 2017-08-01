@@ -25,16 +25,15 @@ import android.util.Log;
 
 import java.util.Map;
 
-import rx.functions.Func1;
-import xyz.truenight.rxinapps.RxInApps;
 import xyz.truenight.rxinapps.exception.InAppBillingException;
 import xyz.truenight.rxinapps.exception.MerchantIdException;
 import xyz.truenight.rxinapps.exception.PayloadException;
+import xyz.truenight.rxinapps.exception.PurchaseCenceledException;
+import xyz.truenight.rxinapps.exception.PurchaseFailedException;
 import xyz.truenight.rxinapps.exception.SignatureException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.utils.Utils;
 
 public class HiddenActivity extends Activity {
@@ -53,6 +52,7 @@ public class HiddenActivity extends Activity {
                     PURCHASE_FLOW_REQUEST_CODE, new Intent(), 0, 0, 0);
         } catch (IntentSender.SendIntentException e) {
             RxInApps.with(this).deliverPurchaseError(e);
+            super.finish();
         }
     }
 
@@ -90,7 +90,8 @@ public class HiddenActivity extends Activity {
         } else if (responseCode == Constants.RESULT_ITEM_ALREADY_OWNED) {
             handleAlreadyOwnedResponse(data, purchasePayload, rxInApps);
         } else {
-            rxInApps.deliverPurchaseError(new InAppBillingException("Failed to purchase: RESPONSE_CODE=" + responseCode));
+            rxInApps.deliverPurchaseError(new PurchaseFailedException("Failed to purchase: RESPONSE_CODE=" + responseCode));
+            super.finish();
         }
         return true;
     }
@@ -112,6 +113,7 @@ public class HiddenActivity extends Activity {
                     rxInApps.putPurchaseToCache(purchase, productType);
 
                     rxInApps.deliverPurchaseResult(purchase);
+                    super.finish();
                 } else {
                     throw new SignatureException("Public key signature does NOT match");
                 }
@@ -121,6 +123,7 @@ public class HiddenActivity extends Activity {
         } catch (Exception e) {
             Log.e(TAG, "", e);
             rxInApps.deliverPurchaseError(e);
+            super.finish();
         }
     }
 
@@ -164,11 +167,19 @@ public class HiddenActivity extends Activity {
 
                 purchase.setRestored(true);
                 rxInApps.deliverPurchaseResult(purchase);
+                super.finish();
             } else {
                 throw new PayloadException(String.format("Payload mismatch: %s != %s", purchasePayload, developerPayload));
             }
         } catch (Exception e) {
             rxInApps.deliverPurchaseError(e);
+            super.finish();
         }
+    }
+
+    @Override
+    public void finish() {
+        RxInApps.with(this).deliverPurchaseError(new PurchaseCenceledException("Payment flow canceled!"));
+        super.finish();
     }
 }

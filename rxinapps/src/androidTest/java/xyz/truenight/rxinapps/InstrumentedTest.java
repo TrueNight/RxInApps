@@ -16,7 +16,6 @@ import java.util.List;
 
 import rx.Observable;
 import rx.functions.Action1;
-import rx.schedulers.Schedulers;
 import xyz.truenight.rxinapps.model.Purchase;
 
 /**
@@ -39,7 +38,7 @@ public class InstrumentedTest {
         RxInApps rxInApps = RxInApps.with(activityTestRule.getActivity());
         Observable<IInAppBillingService> initialization = rxInApps.initialization();
 
-        initialization.subscribeOn(Schedulers.io()).subscribe(new Action1<IInAppBillingService>() {
+        initialization.subscribe(new Action1<IInAppBillingService>() {
             @Override
             public void call(IInAppBillingService iInAppBillingService) {
                 Log.d("RxInApps", "Sub 1 connected " + iInAppBillingService + "; mainThread = " + isMainThread());
@@ -52,7 +51,7 @@ public class InstrumentedTest {
             }
         });
 
-        rxInApps.purchasedSubscriptions().subscribeOn(Schedulers.io()).subscribe(new Action1<List<Purchase>>() {
+        rxInApps.loadPurchasedProducts().subscribe(new Action1<List<Purchase>>() {
             @Override
             public void call(List<Purchase> purchases) {
                 Log.d("RxInApps", "Sub 3 connected " + purchases.size() + "; mainThread = " + isMainThread());

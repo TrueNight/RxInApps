@@ -26,11 +26,10 @@ import java.util.List;
 
 import rx.Observable;
 import rx.Subscriber;
-import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.LoadFailedException;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.Parser;
-import xyz.truenight.rxinapps.util.RxUtils;
 import xyz.truenight.utils.Utils;
 
 /**
@@ -78,7 +77,7 @@ class PurchasedOnSubscribe implements Observable.OnSubscribe<List<Purchase>> {
                 }
                 RxUtils.publishResult(subscriber, list);
             } else {
-                throw new InAppBillingException("Failed to load purchases: RESPONSE_CODE=" + bundle.getInt(Constants.RESPONSE_CODE));
+                throw new LoadFailedException("Failed to load purchases: RESPONSE_CODE=" + bundle.getInt(Constants.RESPONSE_CODE));
             }
         } catch (Exception e) {
             Log.e(TAG, "", e);
