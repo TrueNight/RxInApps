@@ -25,10 +25,13 @@ import android.util.Log;
 
 import java.util.Map;
 
+import xyz.truenight.rxinapps.exception.BillingUnavailableException;
+import xyz.truenight.rxinapps.exception.DeveloperErrorException;
 import xyz.truenight.rxinapps.exception.InAppBillingException;
+import xyz.truenight.rxinapps.exception.ItemUnavailableException;
 import xyz.truenight.rxinapps.exception.MerchantIdException;
 import xyz.truenight.rxinapps.exception.PayloadException;
-import xyz.truenight.rxinapps.exception.PurchaseCenceledException;
+import xyz.truenight.rxinapps.exception.PurchaseCanceledException;
 import xyz.truenight.rxinapps.exception.PurchaseFailedException;
 import xyz.truenight.rxinapps.exception.SignatureException;
 import xyz.truenight.rxinapps.model.ProductType;
@@ -90,7 +93,28 @@ public class HiddenActivity extends Activity {
         } else if (responseCode == Constants.RESULT_ITEM_ALREADY_OWNED) {
             handleAlreadyOwnedResponse(data, purchasePayload, rxInApps);
         } else {
-            rxInApps.deliverPurchaseError(new PurchaseFailedException("Failed to purchase: RESPONSE_CODE=" + responseCode));
+            Throwable throwable;
+            switch (responseCode) {
+                case Constants.RESULT_USER_CANCELED:
+                    throwable = new PurchaseCanceledException();
+                    break;
+                case Constants.RESULT_BILLING_UNAVAILABLE:
+                    throwable = new BillingUnavailableException();
+                    break;
+                case Constants.RESULT_ITEM_UNAVAILABLE:
+                    throwable = new ItemUnavailableException();
+                    break;
+                case Constants.RESULT_DEVELOPER_ERROR:
+                    throwable = new DeveloperErrorException();
+                    break;
+                case Constants.RESULT_ERROR:
+                    throwable = new PurchaseFailedException("Fatal error during the API action", responseCode);
+                    break;
+                default:
+                    throwable = new PurchaseFailedException(responseCode);
+                    break;
+            }
+            rxInApps.deliverPurchaseError(throwable);
             super.finish();
         }
         return true;
@@ -115,10 +139,10 @@ public class HiddenActivity extends Activity {
                     rxInApps.deliverPurchaseResult(purchase);
                     super.finish();
                 } else {
-                    throw new SignatureException("Public key signature does NOT match");
+                    throw new PurchaseFailedException(new SignatureException("Public key signature does NOT match"));
                 }
             } else {
-                throw new PayloadException(String.format("Payload mismatch: %s != %s", purchasePayload, developerPayload));
+                throw new PurchaseFailedException(new PayloadException(String.format("Payload mismatch: %s != %s", purchasePayload, developerPayload)));
             }
         } catch (Exception e) {
             Log.e(TAG, "", e);
@@ -162,14 +186,14 @@ public class HiddenActivity extends Activity {
                 }
 
                 if (ProductType.isManaged(productType) && !RxInApps.checkMerchantTransactionDetails(purchase)) {
-                    throw new MerchantIdException("Invalid or tampered merchant id!");
+                    throw new PurchaseFailedException(new MerchantIdException("Invalid or tampered merchant id!"));
                 }
 
                 purchase.setRestored(true);
                 rxInApps.deliverPurchaseResult(purchase);
                 super.finish();
             } else {
-                throw new PayloadException(String.format("Payload mismatch: %s != %s", purchasePayload, developerPayload));
+                throw new PurchaseFailedException(new PayloadException(String.format("Payload mismatch: %s != %s", purchasePayload, developerPayload)));
             }
         } catch (Exception e) {
             rxInApps.deliverPurchaseError(e);
@@ -179,7 +203,7 @@ public class HiddenActivity extends Activity {
 
     @Override
     public void finish() {
-        RxInApps.with(this).deliverPurchaseError(new PurchaseCenceledException("Payment flow canceled!"));
+        RxInApps.with(this).deliverPurchaseError(new PurchaseCanceledException());
         super.finish();
     }
 }

@@ -16,6 +16,7 @@ import java.util.List;
 
 import rx.Observable;
 import rx.functions.Action1;
+import rx.schedulers.Schedulers;
 import xyz.truenight.rxinapps.model.Purchase;
 
 /**
@@ -44,7 +45,7 @@ public class InstrumentedTest {
                 Log.d("RxInApps", "Sub 1 connected " + iInAppBillingService + "; mainThread = " + isMainThread());
             }
         });
-        initialization.subscribe(new Action1<IInAppBillingService>() {
+        initialization.subscribeOn(Schedulers.io()).subscribe(new Action1<IInAppBillingService>() {
             @Override
             public void call(IInAppBillingService iInAppBillingService) {
                 Log.d("RxInApps", "Sub 2 connected " + iInAppBillingService + "; mainThread = " + isMainThread());

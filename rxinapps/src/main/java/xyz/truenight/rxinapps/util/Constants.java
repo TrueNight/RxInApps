@@ -21,14 +21,14 @@ public class Constants {
     public static final String BINDING_INTENT_VALUE = "com.android.vending.billing.InAppBillingService.BIND";
     public static final String VENDING_INTENT_PACKAGE = "com.android.vending";
 
-    public static final int RESULT_OK = 0;                //Success
-//    public static final int BILLING_RESPONSE_RESULT_USER_CANCELED = 1;        //User pressed back or canceled a dialog
-//    public static final int BILLING_RESPONSE_RESULT_BILLING_UNAVAILABLE = 3;//Billing API version is not supported for the type requested
-//    public static final int BILLING_RESPONSE_RESULT_ITEM_UNAVAILABLE = 4;    //Requested product is not available for purchase
-//    public static final int BILLING_RESPONSE_RESULT_DEVELOPER_ERROR = 5;    //Invalid arguments provided to the API. This error can also indicate that the application was not correctly signed or properly set up for In-app Billing in Google Play, or does not have the necessary permissions in its manifest
-//    public static final int BILLING_RESPONSE_RESULT_ERROR = 6;                //Fatal error during the API action
-    public static final int RESULT_ITEM_ALREADY_OWNED = 7; //Failure to purchase since item is already owned
-//    public static final int BILLING_RESPONSE_RESULT_ITEM_NOT_OWNED = 8;    //Failure to consume since item is not owned
+    public static final int RESULT_OK = 0;                      //Success
+    public static final int RESULT_USER_CANCELED = 1;           //User pressed back or canceled a dialog
+    public static final int RESULT_BILLING_UNAVAILABLE = 3;     //Billing API version is not supported for the type requested
+    public static final int RESULT_ITEM_UNAVAILABLE = 4;        //Requested product is not available for purchase
+    public static final int RESULT_DEVELOPER_ERROR = 5;         //Invalid arguments provided to the API. This error can also indicate that the application was not correctly signed or properly set up for In-app Billing in Google Play, or does not have the necessary permissions in its manifest
+    public static final int RESULT_ERROR = 6;                   //Fatal error during the API action
+    public static final int RESULT_ITEM_ALREADY_OWNED = 7;      //Failure to purchase since item is already owned
+    public static final int RESULT_ITEM_NOT_OWNED = 8;          //Failure to consume since item is not owned
 
     public static final String RESPONSE_CODE = "RESPONSE_CODE";
     public static final String DETAILS_LIST = "DETAILS_LIST";
@@ -40,27 +40,4 @@ public class Constants {
     public static final String INAPP_DATA_SIGNATURE_LIST = "INAPP_DATA_SIGNATURE_LIST";
 
     public static final String PURCHASE_PAYLOAD = "PURCHASE_PAYLOAD";
-
-//    public static final int BILLING_ERROR_FAILED_LOAD_PURCHASES = 100;
-//    public static final int BILLING_ERROR_FAILED_TO_INITIALIZE_PURCHASE = 101;
-//    public static final int BILLING_ERROR_INVALID_SIGNATURE = 102;
-//    public static final int BILLING_ERROR_LOST_CONTEXT = 103;
-//    public static final int BILLING_ERROR_INVALID_MERCHANT_ID = 104;
-//    public static final int BILLING_ERROR_PAYLOAD_MISMATCH = 105;
-//    public static final int BILLING_ERROR_OTHER_ERROR = 110;
-//    public static final int BILLING_ERROR_CONSUME_FAILED = 111;
-//    public static final int BILLING_ERROR_SKUDETAILS_FAILED = 112;
-//
-//    public static final int BILLING_PROCESSOR_NOT_INITIALIZED = 400;
-//    public static final int PRODUCT_ID_IS_EMPTY = 401;
-//    public static final int PURCHASE_TYPE_IS_EMPTY = 402;
-//    public static final int BUNDLE_NULL_FROM_GOOGLE = 403;
-//    public static final int TRANSACTION_DETAILS_NOT_FOUND = 404;
-//    public static final int PURCHASE_TOKEN_EMPTY = 405;
-//    public static final int BILLING_SERVICE_IS_NULL = 406;
-//    public static final int PRODUCTS_LIST_IS_NULL = 407;
-//    public static final int PRODUCTS_LIST_IS_EMPTY = 408;
-//    public static final int NOT_BILLING_PROCESSOR_FLOW = 409;
-//    public static final int NULL_DATA_PASSED_FROM_INTENT = 410;
-//    public static final int PRODUCT_FOR_CONSUME_WAS_NOT_FOUND = 411;
 }

@@ -26,7 +26,7 @@ import java.util.Map;
 import rx.Observable;
 import rx.Subscriber;
 import xyz.truenight.rxinapps.exception.ConsumeFailedException;
-import xyz.truenight.rxinapps.exception.ProductNotFoundException;
+import xyz.truenight.rxinapps.exception.PurchaseNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
@@ -77,7 +77,7 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     throw new ConsumeFailedException(String.format(Locale.getDefault(), "Failed to consume %s: RESPONSE_CODE=%d", productId, response));
                 }
             } else {
-                throw new ProductNotFoundException("Purchase for consuming not found");
+                throw new PurchaseNotFoundException("Purchase for consuming not found");
             }
         } catch (Exception e) {
             RxUtils.publishError(subscriber, e);

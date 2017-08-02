@@ -273,7 +273,14 @@ public class RxInApps extends ContextHolder {
                         .flatMap(new Func1<IInAppBillingService, Observable<Purchase>>() {
                             @Override
                             public Observable<Purchase> call(final IInAppBillingService billingService) {
-                                return Observable.unsafeCreate(PurchaseOnSubscribe.create(RxInApps.this, billingService, packageName, productId, productType, purchaseSubscriber));
+                                return Observable.unsafeCreate(
+                                        PurchaseOnSubscribe.create(RxInApps.this,
+                                                billingService,
+                                                packageName,
+                                                productId,
+                                                productType,
+                                                purchaseSubscriber)
+                                );
                             }
                         })
                         .doOnUnsubscribe(new Action0() {

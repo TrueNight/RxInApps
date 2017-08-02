@@ -29,7 +29,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import rx.Observable;
 import rx.Subscriber;
+import xyz.truenight.rxinapps.exception.BillingUnavailableException;
+import xyz.truenight.rxinapps.exception.DeveloperErrorException;
+import xyz.truenight.rxinapps.exception.ItemUnavailableException;
 import xyz.truenight.rxinapps.exception.MerchantIdException;
+import xyz.truenight.rxinapps.exception.PurchaseCanceledException;
 import xyz.truenight.rxinapps.exception.PurchaseFailedException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
@@ -69,7 +73,7 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
     }
 
     @Override
-    public void call(Subscriber<? super Purchase > subscriber) {
+    public void call(Subscriber<? super Purchase> subscriber) {
 
         try {
             String purchasePayload = productType + ":" + UUID.randomUUID();
@@ -81,9 +85,9 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                             productId, productType, purchasePayload);
 
             if (bundle != null) {
-                int response = bundle.getInt(Constants.RESPONSE_CODE);
+                int responseCode = bundle.getInt(Constants.RESPONSE_CODE);
 
-                if (response == Constants.RESULT_OK) {
+                if (responseCode == Constants.RESULT_OK) {
 
                     PendingIntent pendingIntent = bundle.getParcelable(Constants.BUY_INTENT);
 
@@ -96,7 +100,7 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     } else {
                         throw new PurchaseFailedException(new NullPointerException("Buy intent is NULL"));
                     }
-                } else if (response == Constants.RESULT_ITEM_ALREADY_OWNED) {
+                } else if (responseCode == Constants.RESULT_ITEM_ALREADY_OWNED) {
 
                     Map<String, Purchase> map = context.getStorage().get(productType);
                     Purchase purchase;
@@ -112,13 +116,26 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     }
 
                     if (ProductType.isManaged(productType) && !RxInApps.checkMerchantTransactionDetails(purchase)) {
-                        throw new MerchantIdException("Invalid or tampered merchant id!");
+                        throw new PurchaseFailedException(new MerchantIdException("Invalid or tampered merchant id!"));
                     }
 
                     purchase.setRestored(true);
                     RxUtils.publishResult(subscriber, purchase);
                 } else {
-                    throw new PurchaseFailedException("Failed to purchase: RESPONSE_CODE=" + response);
+                    switch (responseCode) {
+                        case Constants.RESULT_USER_CANCELED:
+                            throw new PurchaseCanceledException();
+                        case Constants.RESULT_BILLING_UNAVAILABLE:
+                            throw new BillingUnavailableException();
+                        case Constants.RESULT_ITEM_UNAVAILABLE:
+                            throw new ItemUnavailableException();
+                        case Constants.RESULT_DEVELOPER_ERROR:
+                            throw new DeveloperErrorException();
+                        case Constants.RESULT_ERROR:
+                            throw new PurchaseFailedException("Fatal error during the API action", responseCode);
+                        default:
+                            throw new PurchaseFailedException(responseCode);
+                    }
                 }
             } else {
                 throw new PurchaseFailedException(new NullPointerException("Bundle is NULL"));
