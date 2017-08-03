@@ -17,6 +17,7 @@
 package xyz.truenight.rxinapps;
 
 import rx.Subscriber;
+import rx.Subscription;
 
 class RxUtils {
     private RxUtils() {
@@ -26,16 +27,28 @@ class RxUtils {
         return subscriber == null || subscriber.isUnsubscribed();
     }
 
-    public static <T> void publishResult(Subscriber<? super T> subscriber, T list) {
+    public static <T> boolean addOnUnsubscribe(Subscriber<? super T> subscriber, Subscription subscription) {
         if (!isUnsubscribed(subscriber)) {
-            subscriber.onNext(list);
-            subscriber.onCompleted();
+            subscriber.add(subscription);
+            return true;
         }
+        return false;
     }
 
-    public static void publishError(Subscriber subscriber, Throwable e) {
+    public static <T> boolean publishResult(Subscriber<? super T> subscriber, T t) {
+        if (!isUnsubscribed(subscriber)) {
+            subscriber.onNext(t);
+            subscriber.onCompleted();
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean publishError(Subscriber subscriber, Throwable e) {
         if (!isUnsubscribed(subscriber)) {
             subscriber.onError(e);
+            return true;
         }
+        return false;
     }
 }

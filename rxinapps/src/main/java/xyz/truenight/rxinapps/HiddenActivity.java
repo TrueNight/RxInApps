@@ -25,6 +25,8 @@ import android.util.Log;
 
 import java.util.Map;
 
+import rx.functions.Action0;
+import rx.subscriptions.Subscriptions;
 import xyz.truenight.rxinapps.exception.BillingUnavailableException;
 import xyz.truenight.rxinapps.exception.DeveloperErrorException;
 import xyz.truenight.rxinapps.exception.InAppBillingException;
@@ -50,11 +52,21 @@ public class HiddenActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         PendingIntent pendingIntent = getIntent().getParcelableExtra(Constants.BUY_INTENT);
+        RxInApps rxInApps = RxInApps.with(this);
+
+        if (!rxInApps.bindPurchaseUnsubscribe(Subscriptions.create(new Action0() {
+            @Override
+            public void call() {
+                HiddenActivity.super.finish();
+            }
+        }))) {
+            super.finish();
+        }
         try {
             startIntentSenderForResult(pendingIntent.getIntentSender(),
                     PURCHASE_FLOW_REQUEST_CODE, new Intent(), 0, 0, 0);
         } catch (IntentSender.SendIntentException e) {
-            RxInApps.with(this).deliverPurchaseError(e);
+            rxInApps.deliverPurchaseError(e);
             super.finish();
         }
     }
@@ -79,6 +91,7 @@ public class HiddenActivity extends Activity {
 
         if (rxInApps.checkPurchaseSubscriber()) {
             Log.e(TAG, "", new InAppBillingException("Subscriber for purchase is unsubscribed or NULL"));
+            super.finish();
             return true;
         }
 

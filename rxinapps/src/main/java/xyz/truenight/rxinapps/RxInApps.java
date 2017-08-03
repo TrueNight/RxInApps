@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import rx.Observable;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
@@ -293,12 +294,16 @@ public class RxInApps extends ContextHolder {
         });
     }
 
-    void deliverPurchaseResult(Purchase purchase) {
-        RxUtils.publishResult(Utils.unwrap(purchaseSubscriber), purchase);
+    boolean bindPurchaseUnsubscribe(Subscription subscription) {
+        return RxUtils.addOnUnsubscribe(Utils.unwrap(purchaseSubscriber), subscription);
     }
 
-    void deliverPurchaseError(Throwable th) {
-        RxUtils.publishError(Utils.unwrap(purchaseSubscriber), th);
+    boolean deliverPurchaseResult(Purchase purchase) {
+        return RxUtils.publishResult(Utils.unwrap(purchaseSubscriber), purchase);
+    }
+
+    boolean deliverPurchaseError(Throwable th) {
+        return RxUtils.publishError(Utils.unwrap(purchaseSubscriber), th);
     }
 
     /**
