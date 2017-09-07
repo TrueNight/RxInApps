@@ -23,8 +23,8 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.Locale;
 import java.util.Map;
 
-import rx.Observable;
-import rx.Subscriber;
+import rx.Emitter;
+import rx.functions.Action1;
 import xyz.truenight.rxinapps.exception.ConsumeFailedException;
 import xyz.truenight.rxinapps.exception.PurchaseNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
@@ -32,7 +32,7 @@ import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.utils.Utils;
 
-class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
+class ConsumePurchaseOnSubscribe implements Action1<Emitter<Purchase>> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -43,7 +43,7 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
     private String productId;
 
 
-    public static Observable.OnSubscribe<Purchase> create(RxInApps context, IInAppBillingService billingService, String packageName, Map<String, Purchase> map, String productId) {
+    public static ConsumePurchaseOnSubscribe create(RxInApps context, IInAppBillingService billingService, String packageName, Map<String, Purchase> map, String productId) {
         return new ConsumePurchaseOnSubscribe(context, billingService, packageName, map, productId);
     }
 
@@ -56,7 +56,7 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
     }
 
     @Override
-    public void call(Subscriber<? super Purchase > subscriber) {
+    public void call(Emitter<Purchase> emitter) {
         try {
             Purchase purchase = map.get(productId);
 
@@ -72,7 +72,8 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                 if (response == Constants.RESULT_OK) {
                     context.removePurchaseFromCache(productId, ProductType.MANAGED);
                     Log.d(TAG, "Successfully consumed " + productId + " purchase.");
-                    RxUtils.publishResult(subscriber, purchase);
+                    emitter.onNext(purchase);
+                    emitter.onCompleted();
                 } else {
                     throw new ConsumeFailedException(String.format(Locale.getDefault(), "Failed to consume %s: RESPONSE_CODE=%d", productId, response));
                 }
@@ -80,7 +81,7 @@ class ConsumePurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                 throw new PurchaseNotFoundException("Purchase for consuming not found");
             }
         } catch (Exception e) {
-            RxUtils.publishError(subscriber, e);
+            emitter.onError(e);
         }
     }
 }

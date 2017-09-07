@@ -33,19 +33,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import rx.Emitter;
 import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
-import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Cancellable;
 import rx.functions.Func1;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
-import rx.subscriptions.Subscriptions;
 import xyz.truenight.rxinapps.exception.InitializationException;
 import xyz.truenight.rxinapps.util.Constants;
 
-class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingService> {
+class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -100,18 +99,19 @@ class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingServi
     }
 
     @Override
-    public void call(final Subscriber<? super IInAppBillingService> subscriber) {
+    public void call(final Emitter<IInAppBillingService> emitter) {
 
         count.incrementAndGet();
         Log.d(TAG, "Subscribed; count=" + count.get());
         if (ref.get() != null) {
-            RxUtils.publishResult(subscriber, ref.get());
-            subscriber.add(Subscriptions.create(new Action0() {
+            emitter.setCancellation(new Cancellable() {
                 @Override
-                public void call() {
+                public void cancel() throws Exception {
                     enqueueUnbindService();
                 }
-            }));
+            });
+            emitter.onNext(ref.get());
+            emitter.onCompleted();
             return;
         }
 
@@ -123,7 +123,8 @@ class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingServi
             @Override
             public void run() {
                 if (mainThread) {
-                    RxUtils.publishResult(subscriber, ref.get());
+                    emitter.onNext(ref.get());
+                    emitter.onCompleted();
                 } else {
                     semaphore.release();
                 }
@@ -138,7 +139,7 @@ class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingServi
                 context.getContext().bindService(new Intent(Constants.BINDING_INTENT_VALUE)
                         .setPackage(Constants.VENDING_INTENT_PACKAGE), serviceConnection, Context.BIND_AUTO_CREATE);
             } catch (Exception e) {
-                subscriber.onError(new InitializationException("Can NOT initialize InAppBillingService", e));
+                emitter.onError(new InitializationException("Can NOT initialize InAppBillingService", e));
                 return;
             }
 
@@ -158,16 +159,17 @@ class ConnectionOnSubscribe implements Observable.OnSubscribe<IInAppBillingServi
             });
         }
 
-        subscriber.add(Subscriptions.create(new Action0() {
+        emitter.setCancellation(new Cancellable() {
             @Override
-            public void call() {
+            public void cancel() throws Exception {
                 enqueueUnbindService();
             }
-        }));
+        });
 
         if (!mainThread) {
             semaphore.acquireUninterruptibly();
-            RxUtils.publishResult(subscriber, ref.get());
+            emitter.onNext(ref.get());
+            emitter.onCompleted();
         }
     }
 

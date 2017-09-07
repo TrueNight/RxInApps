@@ -24,15 +24,15 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.ArrayList;
 import java.util.List;
 
-import rx.Observable;
-import rx.Subscriber;
+import rx.Emitter;
+import rx.functions.Action1;
 import xyz.truenight.rxinapps.exception.LoadFailedException;
 import xyz.truenight.rxinapps.model.SkuDetails;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.Parser;
 import xyz.truenight.utils.Utils;
 
-class SkuDetailsOnSubscribe implements Observable.OnSubscribe<List<SkuDetails>> {
+class SkuDetailsOnSubscribe implements Action1<Emitter<List<SkuDetails>>> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -51,7 +51,7 @@ class SkuDetailsOnSubscribe implements Observable.OnSubscribe<List<SkuDetails>> 
     }
 
     @Override
-    public void call(Subscriber<? super List<SkuDetails>> subscriber) {
+    public void call(Emitter<List<SkuDetails>> emitter) {
         try {
             List<List<String>> batches = Utils.chop(productIdList, 20);
             List<SkuDetails> skuDetails = new ArrayList<>();
@@ -74,10 +74,11 @@ class SkuDetailsOnSubscribe implements Observable.OnSubscribe<List<SkuDetails>> 
                     throw new LoadFailedException("Failed to get sku details: RESPONSE_CODE=" + response);
                 }
             }
-            RxUtils.publishResult(subscriber, skuDetails);
+            emitter.onNext(skuDetails);
+            emitter.onCompleted();
         } catch (Exception e) {
             Log.e(TAG, "Failed to call getSkuDetails", e);
-            RxUtils.publishError(subscriber, e);
+            emitter.onError(e);
         }
     }
 

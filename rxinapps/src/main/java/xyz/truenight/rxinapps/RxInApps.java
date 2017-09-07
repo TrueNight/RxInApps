@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import rx.Emitter;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
@@ -180,7 +181,7 @@ public class RxInApps extends ContextHolder {
      */
     public Observable<IInAppBillingService> initialization() {
         // cache instance during timeout
-        return Observable.unsafeCreate(connection)
+        return Observable.create(connection, Emitter.BackpressureMode.NONE)
                 .take(timeout, TimeUnit.MILLISECONDS)
                 .first();
     }
@@ -196,7 +197,9 @@ public class RxInApps extends ContextHolder {
     }
 
     Observable<List<Purchase>> loadPurchasesByType(IInAppBillingService billingService, String productType) {
-        return Observable.unsafeCreate(PurchasedOnSubscribe.create(billingService, packageName, parser, productType));
+
+        return Observable.create(PurchasedOnSubscribe.create(billingService, packageName, parser, productType),
+                Emitter.BackpressureMode.NONE);
     }
 
     private Observable<Map<String, Purchase>> purchasesByTypeMap(final String productType) {
@@ -333,7 +336,8 @@ public class RxInApps extends ContextHolder {
                         .flatMap(new Func1<IInAppBillingService, Observable<List<SkuDetails>>>() {
                             @Override
                             public Observable<List<SkuDetails>> call(final IInAppBillingService billingService) {
-                                return Observable.unsafeCreate(new SkuDetailsOnSubscribe(billingService, packageName, parser, productIdList, productType));
+                                return Observable.create(new SkuDetailsOnSubscribe(billingService, packageName, parser, productIdList, productType),
+                                        Emitter.BackpressureMode.NONE);
                             }
                         });
             }
@@ -440,14 +444,15 @@ public class RxInApps extends ContextHolder {
                                         .flatMap(new Func1<Map<String, Purchase>, Observable<Purchase>>() {
                                             @Override
                                             public Observable<Purchase> call(final Map<String, Purchase> map) {
-                                                return Observable.unsafeCreate(
+                                                return Observable.create(
                                                         ConsumePurchaseOnSubscribe.create(
                                                                 RxInApps.this,
                                                                 billingService,
                                                                 packageName,
                                                                 map,
                                                                 productId
-                                                        )
+                                                        ),
+                                                        Emitter.BackpressureMode.NONE
                                                 );
                                             }
                                         });

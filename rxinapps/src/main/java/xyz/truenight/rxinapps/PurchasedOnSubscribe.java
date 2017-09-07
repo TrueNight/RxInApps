@@ -24,8 +24,8 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.ArrayList;
 import java.util.List;
 
-import rx.Observable;
-import rx.Subscriber;
+import rx.Emitter;
+import rx.functions.Action1;
 import xyz.truenight.rxinapps.exception.LoadFailedException;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
@@ -36,7 +36,7 @@ import xyz.truenight.utils.Utils;
  * Copyright (C) 2017 Mikhail Frolov
  */
 
-class PurchasedOnSubscribe implements Observable.OnSubscribe<List<Purchase>> {
+class PurchasedOnSubscribe implements Action1<Emitter<List<Purchase>>> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -57,7 +57,7 @@ class PurchasedOnSubscribe implements Observable.OnSubscribe<List<Purchase>> {
     }
 
     @Override
-    public void call(Subscriber<? super List<Purchase>> subscriber) {
+    public void call(Emitter<List<Purchase>> emitter) {
         try {
             Bundle bundle = billingService.getPurchases(Constants.API_VERSION, packageName, type, null);
             if (bundle.getInt(Constants.RESPONSE_CODE) == Constants.RESULT_OK) {
@@ -75,13 +75,14 @@ class PurchasedOnSubscribe implements Observable.OnSubscribe<List<Purchase>> {
                         list.add(purchase);
                     }
                 }
-                RxUtils.publishResult(subscriber, list);
+                emitter.onNext(list);
+                emitter.onCompleted();
             } else {
                 throw new LoadFailedException("Failed to load purchases: RESPONSE_CODE=" + bundle.getInt(Constants.RESPONSE_CODE));
             }
         } catch (Exception e) {
             Log.e(TAG, "", e);
-            RxUtils.publishError(subscriber, e);
+            emitter.onError(e);
         }
     }
 }
