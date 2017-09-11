@@ -81,10 +81,9 @@ public class RxInApps extends ContextHolder {
 
     private final String packageName;
     private final Storage storage;
-    private final long timeout; // timeout seconds
+    private final long timeout;
     private final long cacheLifetime;
     private final Parser parser;
-    private final ConnectionOnSubscribe connection;
 
     private final AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber = new AtomicReference<>();
 
@@ -95,7 +94,6 @@ public class RxInApps extends ContextHolder {
         this.parser = builder.getParser();
         this.packageName = getContext().getApplicationContext().getPackageName();
 
-        this.connection = ConnectionOnSubscribe.create(RxInApps.this, timeout);
         this.storage = builder.getStorage();
     }
 
@@ -176,7 +174,7 @@ public class RxInApps extends ContextHolder {
      */
     public Observable<IInAppBillingService> initialization() {
         // cache instance during timeout
-        return Observable.create(connection, Emitter.BackpressureMode.NONE)
+        return Observable.create(ConnectionOnSubscribe.create(this), Emitter.BackpressureMode.NONE)
                 .take(timeout, TimeUnit.MILLISECONDS)
                 .first();
     }
@@ -611,7 +609,7 @@ public class RxInApps extends ContextHolder {
 
         Long getTimeout() {
             if (timeout == null) {
-                return TimeUnit.SECONDS.toMillis(10);
+                return TimeUnit.SECONDS.toMillis(30);
             } else {
                 return timeout;
             }
