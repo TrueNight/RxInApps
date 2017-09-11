@@ -23,8 +23,6 @@ import android.content.pm.ResolveInfo;
 import android.support.annotation.NonNull;
 
 import com.android.vending.billing.IInAppBillingService;
-import com.orhanobut.hawk.HawkBuilder;
-import com.orhanobut.hawk.HawkFacade;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,22 +41,21 @@ import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 import xyz.truenight.rxinapps.exception.ProductNotFoundException;
-import xyz.truenight.rxinapps.hawk.CachedHawkFacade;
-import xyz.truenight.rxinapps.hawk.SharedPreferencesStorage;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.model.SkuDetails;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.GsonParser;
+import xyz.truenight.rxinapps.util.HawkStorage;
 import xyz.truenight.rxinapps.util.Parser;
 import xyz.truenight.rxinapps.util.Security;
+import xyz.truenight.rxinapps.util.Storage;
 import xyz.truenight.utils.Utils;
 
 public class RxInApps extends ContextHolder {
 
-    static final String TAG = RxInApps.class.getSimpleName();
-    private static final String VERSION = "v1";
-    private static final String STORAGE_TAG = TAG + VERSION;
+    public static final String TAG = RxInApps.class.getSimpleName();
+    public static final String VERSION = "v1";
     private static final String LAST_LOAD = ":LAST_LOAD";
 
     private static final Date DATE_MERCHANT_LIMIT_1 = new Date(2012, 12, 5); //5th December 2012
@@ -83,7 +80,7 @@ public class RxInApps extends ContextHolder {
 
 
     private final String packageName;
-    private final HawkFacade hawk;
+    private final Storage storage;
     private final long timeout; // timeout seconds
     private final long cacheLifetime;
     private final Parser parser;
@@ -99,17 +96,15 @@ public class RxInApps extends ContextHolder {
         this.packageName = getContext().getApplicationContext().getPackageName();
 
         this.connection = ConnectionOnSubscribe.create(RxInApps.this, timeout);
-        // TODO: make caching optional
-        this.hawk = new CachedHawkFacade(new HawkBuilder(getContext())
-                .setStorage(new SharedPreferencesStorage(getContext(), STORAGE_TAG)));
+        this.storage = builder.getStorage();
     }
 
     Parser getParser() {
         return parser;
     }
 
-    HawkFacade getStorage() {
-        return hawk;
+    Storage getStorage() {
+        return storage;
     }
 
     /**
@@ -206,10 +201,10 @@ public class RxInApps extends ContextHolder {
         return Observable.defer(new Func0<Observable<Map<String, Purchase>>>() {
             @Override
             public Observable<Map<String, Purchase>> call() {
-                Long lastLoad = hawk.get(productType + LAST_LOAD);
+                Long lastLoad = storage.get(productType + LAST_LOAD);
                 long delta = Utils.safe(lastLoad) + cacheLifetime - System.currentTimeMillis();
                 if (delta >= 0 && delta <= cacheLifetime) {
-                    Map<String, Purchase> map = hawk.get(productType);
+                    Map<String, Purchase> map = storage.get(productType);
                     if (map != null) {
                         return Observable.just(map);
                     }
@@ -242,8 +237,8 @@ public class RxInApps extends ContextHolder {
                         .doOnNext(new Action1<Map<String, Purchase>>() {
                             @Override
                             public void call(Map<String, Purchase> map) {
-                                hawk.put(productType, map);
-                                hawk.put(productType + LAST_LOAD, System.currentTimeMillis());
+                                storage.put(productType, map);
+                                storage.put(productType + LAST_LOAD, System.currentTimeMillis());
                             }
                         });
             }
@@ -251,15 +246,15 @@ public class RxInApps extends ContextHolder {
     }
 
     void putPurchaseToCache(Purchase purchase, String productType) {
-        Map<String, Purchase> map = hawk.get(productType);
+        Map<String, Purchase> map = storage.get(productType);
         map.put(purchase.getProductId(), purchase);
-        hawk.put(productType, map);
+        storage.put(productType, map);
     }
 
     void removePurchaseFromCache(String productId, String productType) {
-        Map<String, Purchase> map = hawk.get(productType);
+        Map<String, Purchase> map = storage.get(productType);
         map.remove(productId);
-        hawk.put(productType, map);
+        storage.put(productType, map);
     }
 
     boolean checkPurchaseSubscriber() {
@@ -578,8 +573,9 @@ public class RxInApps extends ContextHolder {
         private String licenseKey;
         private String merchantId;
 
-        private Long timeout; // timeout seconds
-        private Long cacheLifetime; // timeout seconds
+        private Long timeout;
+        private Long cacheLifetime;
+        private Storage storage;
 
         public Builder(Context context) {
             this.context = context.getApplicationContext();
@@ -594,6 +590,14 @@ public class RxInApps extends ContextHolder {
                 return new GsonParser();
             } else {
                 return parser;
+            }
+        }
+
+        Storage getStorage() {
+            if (storage == null) {
+                return new HawkStorage(context, parser);
+            } else {
+                return storage;
             }
         }
 
@@ -626,6 +630,14 @@ public class RxInApps extends ContextHolder {
          */
         public Builder parser(Parser parser) {
             this.parser = parser;
+            return this;
+        }
+
+        /**
+         *
+         */
+        public Builder storage(Storage storage) {
+            this.storage = storage;
             return this;
         }
 
