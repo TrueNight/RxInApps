@@ -28,13 +28,13 @@ import com.android.vending.billing.IInAppBillingService;
 
 import java.util.concurrent.Semaphore;
 
-import rx.Emitter;
-import rx.functions.Action1;
-import rx.functions.Cancellable;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleOnSubscribe;
+import io.reactivex.functions.Cancellable;
 import xyz.truenight.rxinapps.exception.InitializationException;
 import xyz.truenight.rxinapps.util.Constants;
 
-class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
+class ConnectionOnSubscribe implements SingleOnSubscribe<IInAppBillingService> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -49,9 +49,12 @@ class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
         this.context = context;
     }
 
-    @Override
-    public void call(final Emitter<IInAppBillingService> emitter) {
+    private boolean isMainThread() {
+        return Looper.getMainLooper() == Looper.myLooper();
+    }
 
+    @Override
+    public void subscribe(final SingleEmitter<IInAppBillingService> emitter) throws Exception {
         final boolean mainThread = isMainThread();
 
         final Semaphore semaphore = mainThread ? null : new Semaphore(0);
@@ -62,8 +65,7 @@ class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
                 Log.d(TAG, "onServiceConnected");
                 service = IInAppBillingService.Stub.asInterface(iBinder);
                 if (mainThread) {
-                    emitter.onNext(service);
-                    emitter.onCompleted();
+                    emitter.onSuccess(service);
                 } else {
                     semaphore.release();
                 }
@@ -84,21 +86,17 @@ class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
             return;
         }
 
-        emitter.setCancellation(new Cancellable() {
+        emitter.setCancellable(new Cancellable() {
             @Override
             public void cancel() throws Exception {
+
                 context.getContext().unbindService(serviceConnection);
             }
         });
 
         if (!mainThread) {
             semaphore.acquireUninterruptibly();
-            emitter.onNext(service);
-            emitter.onCompleted();
+            emitter.onSuccess(service);
         }
-    }
-
-    private boolean isMainThread() {
-        return Looper.getMainLooper() == Looper.myLooper();
     }
 }

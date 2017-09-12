@@ -16,39 +16,55 @@
 
 package xyz.truenight.rxinapps;
 
-import rx.Subscriber;
-import rx.Subscription;
+import io.reactivex.SingleEmitter;
+import io.reactivex.functions.Cancellable;
 
 class RxUtils {
     private RxUtils() {
     }
 
-    public static boolean isUnsubscribed(Subscriber subscriber) {
-        return subscriber == null || subscriber.isUnsubscribed();
+    public static boolean isDisposed(SingleEmitter emitter) {
+        return emitter == null || emitter.isDisposed();
     }
 
-    public static <T> boolean addOnUnsubscribe(Subscriber<? super T> subscriber, Subscription subscription) {
-        if (!isUnsubscribed(subscriber)) {
-            subscriber.add(subscription);
+    public static <T> boolean setOnDispose(SingleEmitter<T> emitter, Cancellable cancellable) {
+        if (emitter != null && !emitter.isDisposed()) {
+            emitter.setCancellable(cancellable);
             return true;
         }
         return false;
     }
 
-    public static <T> boolean publishResult(Subscriber<? super T> subscriber, T t) {
-        if (!isUnsubscribed(subscriber)) {
-            subscriber.onNext(t);
-            subscriber.onCompleted();
+    public static <T> boolean onSuccess(SingleEmitter<T> emitter, T item) {
+        if (emitter != null && !emitter.isDisposed()) {
+            emitter.onSuccess(item);
             return true;
         }
         return false;
     }
 
-    public static boolean publishError(Subscriber subscriber, Throwable e) {
-        if (!isUnsubscribed(subscriber)) {
-            subscriber.onError(e);
+    public static <T> boolean onError(SingleEmitter<T> emitter, Throwable th) {
+        if (emitter != null && !emitter.isDisposed()) {
+            emitter.onError(th);
             return true;
         }
         return false;
     }
+
+//    public static <T> boolean publishResult(Subscriber<? super T> subscriber, T t) {
+//        if (!isDisposed(subscriber)) {
+//            subscriber.onNext(t);
+//            subscriber.onCompleted();
+//            return true;
+//        }
+//        return false;
+//    }
+//
+//    public static boolean publishError(Subscriber subscriber, Throwable e) {
+//        if (!isDisposed(subscriber)) {
+//            subscriber.onError(e);
+//            return true;
+//        }
+//        return false;
+//    }
 }

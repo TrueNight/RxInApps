@@ -27,8 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import rx.Observable;
-import rx.Subscriber;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleOnSubscribe;
 import xyz.truenight.rxinapps.exception.BillingUnavailableException;
 import xyz.truenight.rxinapps.exception.DeveloperErrorException;
 import xyz.truenight.rxinapps.exception.ItemUnavailableException;
@@ -44,26 +44,26 @@ import xyz.truenight.utils.Utils;
  * Copyright (C) 2017 Mikhail Frolov
  */
 
-class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
+class PurchaseOnSubscribe implements SingleOnSubscribe<Purchase> {
 
     private RxInApps context;
     private IInAppBillingService billingService;
     private String packageName;
     private String productId;
     private String productType;
-    private AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber;
+    private AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber;
 
-    public static Observable.OnSubscribe<Purchase> create(RxInApps context,
-                                                          IInAppBillingService billingService,
-                                                          String packageName,
-                                                          String productId,
-                                                          String productType,
-                                                          AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber) {
+    public static PurchaseOnSubscribe create(RxInApps context,
+                                             IInAppBillingService billingService,
+                                             String packageName,
+                                             String productId,
+                                             String productType,
+                                             AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber) {
 
         return new PurchaseOnSubscribe(context, billingService, packageName, productId, productType, purchaseSubscriber);
     }
 
-    public PurchaseOnSubscribe(RxInApps context, IInAppBillingService billingService, String packageName, String productId, String productType, AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber) {
+    public PurchaseOnSubscribe(RxInApps context, IInAppBillingService billingService, String packageName, String productId, String productType, AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber) {
         this.context = context;
         this.billingService = billingService;
         this.packageName = packageName;
@@ -73,12 +73,11 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
     }
 
     @Override
-    public void call(Subscriber<? super Purchase> subscriber) {
-
+    public void subscribe(SingleEmitter<Purchase> emitter) throws Exception {
         try {
             String purchasePayload = productType + ":" + UUID.randomUUID();
 
-            purchaseSubscriber.set(subscriber);
+            purchaseSubscriber.set(emitter);
 
             Bundle bundle =
                     billingService.getBuyIntent(Constants.API_VERSION, packageName,
@@ -120,7 +119,7 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
                     }
 
                     purchase.setRestored(true);
-                    RxUtils.publishResult(subscriber, purchase);
+                    emitter.onSuccess(purchase);
                 } else {
                     switch (responseCode) {
                         case Constants.RESULT_USER_CANCELED:
@@ -140,8 +139,8 @@ class PurchaseOnSubscribe implements Observable.OnSubscribe<Purchase> {
             } else {
                 throw new PurchaseFailedException(new NullPointerException("Bundle is NULL"));
             }
-        } catch (Exception e) {
-            RxUtils.publishError(subscriber, e);
+        } catch (Throwable th) {
+            emitter.onError(th);
         }
     }
 }

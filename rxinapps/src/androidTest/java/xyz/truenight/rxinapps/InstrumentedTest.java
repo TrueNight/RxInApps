@@ -1,9 +1,9 @@
 package xyz.truenight.rxinapps;
 
 import android.os.Looper;
-import android.support.test.annotation.UiThreadTest;
 import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
+import android.test.UiThreadTest;
 import android.util.Log;
 
 import com.android.vending.billing.IInAppBillingService;
@@ -14,9 +14,9 @@ import org.junit.runner.RunWith;
 
 import java.util.List;
 
-import rx.Observable;
-import rx.functions.Action1;
-import rx.schedulers.Schedulers;
+import io.reactivex.Single;
+import io.reactivex.functions.Consumer;
+import io.reactivex.schedulers.Schedulers;
 import xyz.truenight.rxinapps.model.Purchase;
 
 /**
@@ -37,29 +37,29 @@ public class InstrumentedTest {
 //        Context appContext = InstrumentationRegistry.getTargetContext();
 
         RxInApps rxInApps = RxInApps.with(activityTestRule.getActivity());
-        Observable<IInAppBillingService> initialization = rxInApps.initialization();
+        Single<IInAppBillingService> initialization = rxInApps.initialization();
 
-        initialization.subscribe(new Action1<IInAppBillingService>() {
+        initialization.subscribe(new Consumer<IInAppBillingService>() {
             @Override
-            public void call(IInAppBillingService iInAppBillingService) {
+            public void accept(IInAppBillingService iInAppBillingService) throws Exception {
                 Log.d("RxInApps", "Sub 1 connected " + iInAppBillingService + "; mainThread = " + isMainThread());
             }
         });
-        initialization.subscribeOn(Schedulers.io()).subscribe(new Action1<IInAppBillingService>() {
+        initialization.subscribeOn(Schedulers.io()).subscribe(new Consumer<IInAppBillingService>() {
             @Override
-            public void call(IInAppBillingService iInAppBillingService) {
+            public void accept(IInAppBillingService iInAppBillingService) throws Exception {
                 Log.d("RxInApps", "Sub 2 connected " + iInAppBillingService + "; mainThread = " + isMainThread());
             }
         });
 
-        rxInApps.loadPurchasedProducts().subscribe(new Action1<List<Purchase>>() {
+        rxInApps.loadPurchasedProducts().subscribe(new Consumer<List<Purchase>>() {
             @Override
-            public void call(List<Purchase> purchases) {
+            public void accept(List<Purchase> purchases) throws Exception {
                 Log.d("RxInApps", "Sub 3 connected " + purchases.size() + "; mainThread = " + isMainThread());
             }
-        }, new Action1<Throwable>() {
+        }, new Consumer<Throwable>() {
             @Override
-            public void call(Throwable throwable) {
+            public void accept(Throwable throwable) throws Exception {
                 Log.d("RxInApps", "Sub 3 error", throwable);
             }
         });

@@ -24,15 +24,15 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.ArrayList;
 import java.util.List;
 
-import rx.Emitter;
-import rx.functions.Action1;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleOnSubscribe;
 import xyz.truenight.rxinapps.exception.LoadFailedException;
 import xyz.truenight.rxinapps.model.SkuDetails;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.rxinapps.util.Parser;
 import xyz.truenight.utils.Utils;
 
-class SkuDetailsOnSubscribe implements Action1<Emitter<List<SkuDetails>>> {
+class SkuDetailsOnSubscribe implements SingleOnSubscribe<List<SkuDetails>> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -50,8 +50,17 @@ class SkuDetailsOnSubscribe implements Action1<Emitter<List<SkuDetails>>> {
         this.productType = productType;
     }
 
+    private static <T> ArrayList<T> toArrayList(List<T> list) {
+        if (list == null) return null;
+        if (list instanceof ArrayList) {
+            return (ArrayList<T>) list;
+        } else {
+            return new ArrayList<>(list);
+        }
+    }
+
     @Override
-    public void call(Emitter<List<SkuDetails>> emitter) {
+    public void subscribe(SingleEmitter<List<SkuDetails>> emitter) throws Exception {
         try {
             List<List<String>> batches = Utils.chop(productIdList, 20);
             List<SkuDetails> skuDetails = new ArrayList<>();
@@ -74,20 +83,10 @@ class SkuDetailsOnSubscribe implements Action1<Emitter<List<SkuDetails>>> {
                     throw new LoadFailedException("Failed to get sku details: RESPONSE_CODE=" + response);
                 }
             }
-            emitter.onNext(skuDetails);
-            emitter.onCompleted();
+            emitter.onSuccess(skuDetails);
         } catch (Exception e) {
             Log.e(TAG, "Failed to call getSkuDetails", e);
             emitter.onError(e);
-        }
-    }
-
-    private static <T> ArrayList<T> toArrayList(List<T> list) {
-        if (list == null) return null;
-        if (list instanceof ArrayList) {
-            return (ArrayList<T>) list;
-        } else {
-            return new ArrayList<>(list);
         }
     }
 }

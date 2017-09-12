@@ -23,8 +23,8 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.Locale;
 import java.util.Map;
 
-import rx.Emitter;
-import rx.functions.Action1;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleOnSubscribe;
 import xyz.truenight.rxinapps.exception.ConsumeFailedException;
 import xyz.truenight.rxinapps.exception.PurchaseNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
@@ -32,7 +32,7 @@ import xyz.truenight.rxinapps.model.Purchase;
 import xyz.truenight.rxinapps.util.Constants;
 import xyz.truenight.utils.Utils;
 
-class ConsumePurchaseOnSubscribe implements Action1<Emitter<Purchase>> {
+class ConsumePurchaseOnSubscribe implements SingleOnSubscribe<Purchase> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -56,7 +56,7 @@ class ConsumePurchaseOnSubscribe implements Action1<Emitter<Purchase>> {
     }
 
     @Override
-    public void call(Emitter<Purchase> emitter) {
+    public void subscribe(SingleEmitter<Purchase> emitter) throws Exception {
         try {
             Purchase purchase = map.get(productId);
 
@@ -72,8 +72,7 @@ class ConsumePurchaseOnSubscribe implements Action1<Emitter<Purchase>> {
                 if (response == Constants.RESULT_OK) {
                     context.removePurchaseFromCache(productId, ProductType.MANAGED);
                     Log.d(TAG, "Successfully consumed " + productId + " purchase.");
-                    emitter.onNext(purchase);
-                    emitter.onCompleted();
+                    emitter.onSuccess(purchase);
                 } else {
                     throw new ConsumeFailedException(String.format(Locale.getDefault(), "Failed to consume %s: RESPONSE_CODE=%d", productId, response));
                 }

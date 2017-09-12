@@ -25,8 +25,7 @@ import android.util.Log;
 
 import java.util.Map;
 
-import rx.functions.Action0;
-import rx.subscriptions.Subscriptions;
+import io.reactivex.functions.Cancellable;
 import xyz.truenight.rxinapps.exception.BillingUnavailableException;
 import xyz.truenight.rxinapps.exception.DeveloperErrorException;
 import xyz.truenight.rxinapps.exception.InAppBillingException;
@@ -54,12 +53,12 @@ public class HiddenActivity extends Activity {
         PendingIntent pendingIntent = getIntent().getParcelableExtra(Constants.BUY_INTENT);
         RxInApps rxInApps = RxInApps.with(this);
 
-        if (!rxInApps.bindPurchaseUnsubscribe(Subscriptions.create(new Action0() {
+        if (!rxInApps.bindPurchaseUnsubscribe(new Cancellable() {
             @Override
-            public void call() {
+            public void cancel() throws Exception {
                 HiddenActivity.super.finish();
             }
-        }))) {
+        })) {
             super.finish();
         }
         try {
