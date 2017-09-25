@@ -3,7 +3,7 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps/badge.svg)](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps)
 [![Javadoc](https://javadoc-emblem.rhcloud.com/doc/xyz.truenight.rxinapps/rxinapps/badge.svg)](http://www.javadoc.io/doc/xyz.truenight.rxinapps/rxinapps)
 
-Support for serializing RealmObject with Gson
+RxJava wrapper around In App Billing API v3 for Android
 
 # Overview
 
