@@ -1,7 +1,7 @@
 # RxInApps
-[![Download](https://api.bintray.com/packages/truenight/maven/rxinapps/images/download.svg)](https://bintray.com/truenight/maven/rxinapps/_latestVersion)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps/badge.svg)](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps)
-[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/xyz.truenight.rxinapps/rxinapps/badge.svg)](http://www.javadoc.io/doc/xyz.truenight.rxinapps/rxinapps)
+[![Download](https://api.bintray.com/packages/truenight/maven/rxinapps2/images/download.svg)](https://bintray.com/truenight/maven/rxinapps2/_latestVersion)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps2/badge.svg)](https://maven-badges.herokuapp.com/maven-central/xyz.truenight.rxinapps/rxinapps2)
+[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/xyz.truenight.rxinapps/rxinapps2/badge.svg)](http://www.javadoc.io/doc/xyz.truenight.rxinapps/rxinapps2)
 
 Support for serializing RealmObject with Gson
 
