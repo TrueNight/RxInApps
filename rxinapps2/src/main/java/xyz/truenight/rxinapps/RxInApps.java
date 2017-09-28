@@ -84,7 +84,6 @@ public class RxInApps extends ContextHolder {
 
     private final String packageName;
     private final Storage storage;
-    private final long timeout;
     private final long cacheLifetime;
     private final Parser parser;
 
@@ -92,7 +91,6 @@ public class RxInApps extends ContextHolder {
 
     private RxInApps(Builder builder) {
         super(builder.getContext());
-        this.timeout = builder.getTimeout();
         this.cacheLifetime = builder.getCacheLifetime();
         this.parser = builder.getParser();
         this.packageName = getContext().getApplicationContext().getPackageName();
@@ -177,8 +175,7 @@ public class RxInApps extends ContextHolder {
      */
     public Single<IInAppBillingService> initialization() {
         // cache instance during timeout
-        return Single.create(ConnectionOnSubscribe.create(this))
-                .timeout(timeout, TimeUnit.MILLISECONDS);
+        return Single.create(ConnectionOnSubscribe.create(this));
     }
 
     Single<List<Purchase>> loadPurchasesByType(final String productType) {
@@ -568,7 +565,6 @@ public class RxInApps extends ContextHolder {
         private String licenseKey;
         private String merchantId;
 
-        private Long timeout;
         private Long cacheLifetime;
         private Storage storage;
 
@@ -602,14 +598,6 @@ public class RxInApps extends ContextHolder {
 
         String getMerchantId() {
             return merchantId;
-        }
-
-        Long getTimeout() {
-            if (timeout == null) {
-                return TimeUnit.SECONDS.toMillis(30);
-            } else {
-                return timeout;
-            }
         }
 
         Long getCacheLifetime() {
@@ -655,14 +643,6 @@ public class RxInApps extends ContextHolder {
          */
         public Builder merchantId(String merchantId) {
             this.merchantId = merchantId;
-            return this;
-        }
-
-        /**
-         * Timeout for InAppBillingService initialization
-         */
-        public Builder timeout(long value, TimeUnit timeUnit) {
-            this.timeout = timeUnit.toMillis(value);
             return this;
         }
 
