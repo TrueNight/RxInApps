@@ -83,6 +83,7 @@ public class RxInApps extends ContextHolder {
     private final Storage storage;
     private final long cacheLifetime;
     private final Parser parser;
+    private final Observable<IInAppBillingService> connection = Observable.create(ConnectionOnSubscribe.create(this), Emitter.BackpressureMode.NONE).first().share();
 
     private final AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber = new AtomicReference<>();
 
@@ -171,9 +172,7 @@ public class RxInApps extends ContextHolder {
      * Observable which emits InAppBillingService while this service is bound
      */
     public Observable<IInAppBillingService> initialization() {
-        // cache instance during timeout
-        return Observable.create(ConnectionOnSubscribe.create(this), Emitter.BackpressureMode.NONE)
-                .first();
+        return connection;
     }
 
     Observable<List<Purchase>> loadPurchasesByType(final String productType) {

@@ -87,6 +87,7 @@ class ConnectionOnSubscribe implements Action1<Emitter<IInAppBillingService>> {
         emitter.setCancellation(new Cancellable() {
             @Override
             public void cancel() throws Exception {
+                Log.d(TAG, "onServiceUnbind");
                 context.getContext().unbindService(serviceConnection);
             }
         });
