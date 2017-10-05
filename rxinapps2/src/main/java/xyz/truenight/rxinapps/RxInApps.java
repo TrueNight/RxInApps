@@ -81,13 +81,14 @@ public class RxInApps extends ContextHolder {
         return instance;
     }
 
-
     private final String packageName;
     private final Storage storage;
     private final long cacheLifetime;
     private final Parser parser;
 
     private final AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber = new AtomicReference<>();
+    private final Observable<IInAppBillingService> connection = Single.create(ConnectionOnSubscribe.create(RxInApps.this))
+            .toObservable().share();
 
     private RxInApps(Builder builder) {
         super(builder.getContext());
@@ -175,7 +176,8 @@ public class RxInApps extends ContextHolder {
      */
     public Single<IInAppBillingService> initialization() {
         // cache instance during timeout
-        return Single.create(ConnectionOnSubscribe.create(this));
+        return connection
+                .singleOrError();
     }
 
     Single<List<Purchase>> loadPurchasesByType(final String productType) {
@@ -557,7 +559,6 @@ public class RxInApps extends ContextHolder {
     public Single<List<SkuDetails>> getSubscriptions(List<String> productIdList) {
         return getSkuDetails(productIdList, ProductType.SUBSCRIPTION);
     }
-
 
     public static class Builder {
         private Context context;
