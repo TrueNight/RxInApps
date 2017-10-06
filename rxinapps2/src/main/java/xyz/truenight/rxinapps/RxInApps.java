@@ -87,8 +87,16 @@ public class RxInApps extends ContextHolder {
     private final Parser parser;
 
     private final AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber = new AtomicReference<>();
-    private final Observable<IInAppBillingService> connection = Single.create(ConnectionOnSubscribe.create(RxInApps.this))
-            .toObservable().share();
+    private final Observable<IInAppBillingService> connection = Observable.create(ConnectionOnSubscribe.create(RxInApps.this))
+            .timeout(10, TimeUnit.SECONDS)
+            .retry().share();/*RxJavaPlugins.onAssembly(
+            new ObservableCacheRefCount<>(
+                    Observable.create(ConnectionOnSubscribe.create(RxInApps.this))
+                            .timeout(10, TimeUnit.SECONDS)
+                            .retry()
+                            .publish()
+            )
+    );*/
 
     private RxInApps(Builder builder) {
         super(builder.getContext());

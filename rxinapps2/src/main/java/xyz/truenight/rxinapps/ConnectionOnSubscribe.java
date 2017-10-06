@@ -28,13 +28,13 @@ import com.android.vending.billing.IInAppBillingService;
 
 import java.util.concurrent.Semaphore;
 
-import io.reactivex.SingleEmitter;
-import io.reactivex.SingleOnSubscribe;
+import io.reactivex.ObservableEmitter;
+import io.reactivex.ObservableOnSubscribe;
 import io.reactivex.functions.Cancellable;
 import xyz.truenight.rxinapps.exception.InitializationException;
 import xyz.truenight.rxinapps.util.Constants;
 
-class ConnectionOnSubscribe implements SingleOnSubscribe<IInAppBillingService> {
+class ConnectionOnSubscribe implements ObservableOnSubscribe<IInAppBillingService> {
 
     private static final String TAG = RxInApps.TAG;
 
@@ -54,7 +54,7 @@ class ConnectionOnSubscribe implements SingleOnSubscribe<IInAppBillingService> {
     }
 
     @Override
-    public void subscribe(final SingleEmitter<IInAppBillingService> emitter) throws Exception {
+    public void subscribe(final ObservableEmitter<IInAppBillingService> emitter) throws Exception {
         final boolean mainThread = isMainThread();
 
         final Semaphore semaphore = mainThread ? null : new Semaphore(0);
@@ -65,7 +65,7 @@ class ConnectionOnSubscribe implements SingleOnSubscribe<IInAppBillingService> {
                 Log.d(TAG, "onServiceConnected");
                 service = IInAppBillingService.Stub.asInterface(iBinder);
                 if (mainThread) {
-                    emitter.onSuccess(service);
+                    emitter.onNext(service);
                 } else {
                     semaphore.release();
                 }
@@ -95,7 +95,7 @@ class ConnectionOnSubscribe implements SingleOnSubscribe<IInAppBillingService> {
 
         if (!mainThread) {
             semaphore.acquireUninterruptibly();
-            emitter.onSuccess(service);
+            emitter.onNext(service);
         }
     }
 }
