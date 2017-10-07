@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.Observable;
@@ -43,6 +44,7 @@ import io.reactivex.functions.Action;
 import io.reactivex.functions.Cancellable;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 import xyz.truenight.rxinapps.exception.ProductNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
@@ -89,7 +91,12 @@ public class RxInApps extends ContextHolder {
     private final AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber = new AtomicReference<>();
     private final Observable<IInAppBillingService> connection = Observable.create(ConnectionOnSubscribe.create(RxInApps.this))
             .timeout(10, TimeUnit.SECONDS)
-            .retry().share();/*RxJavaPlugins.onAssembly(
+            .retry(new Predicate<Throwable>() {
+                @Override
+                public boolean test(Throwable throwable) throws Exception {
+                    return throwable instanceof TimeoutException;
+                }
+            }).share();/*RxJavaPlugins.onAssembly(
             new ObservableCacheRefCount<>(
                     Observable.create(ConnectionOnSubscribe.create(RxInApps.this))
                             .timeout(10, TimeUnit.SECONDS)
@@ -185,7 +192,7 @@ public class RxInApps extends ContextHolder {
     public Single<IInAppBillingService> initialization() {
         // cache instance during timeout
         return connection
-                .singleOrError();
+                .firstOrError();
     }
 
     Single<List<Purchase>> loadPurchasesByType(final String productType) {
