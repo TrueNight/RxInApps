@@ -66,6 +66,7 @@ class ConnectionOnSubscribe implements ObservableOnSubscribe<IInAppBillingServic
                 service = IInAppBillingService.Stub.asInterface(iBinder);
                 if (mainThread) {
                     emitter.onNext(service);
+                    emitter.onComplete();
                 } else {
                     semaphore.release();
                 }
@@ -96,6 +97,7 @@ class ConnectionOnSubscribe implements ObservableOnSubscribe<IInAppBillingServic
         if (!mainThread) {
             semaphore.acquireUninterruptibly();
             emitter.onNext(service);
+            emitter.onComplete();
         }
     }
 }

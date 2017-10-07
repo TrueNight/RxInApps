@@ -27,6 +27,7 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -258,14 +259,19 @@ public class RxInApps extends ContextHolder {
 
     void putPurchaseToCache(Purchase purchase, String productType) {
         Map<String, Purchase> map = storage.get(productType);
+        if (map == null) {
+            map = new HashMap<>();
+        }
         map.put(purchase.getProductId(), purchase);
         storage.put(productType, map);
     }
 
     void removePurchaseFromCache(String productId, String productType) {
         Map<String, Purchase> map = storage.get(productType);
-        map.remove(productId);
-        storage.put(productType, map);
+        if (map != null) {
+            map.remove(productId);
+            storage.put(productType, map);
+        }
     }
 
     boolean checkPurchaseSubscriber() {
