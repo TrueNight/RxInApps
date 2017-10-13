@@ -55,6 +55,12 @@ class ConnectionOnSubscribe implements ObservableOnSubscribe<IInAppBillingServic
 
     @Override
     public void subscribe(final ObservableEmitter<IInAppBillingService> emitter) throws Exception {
+
+        if (!RxInApps.isIabServiceAvailable(context.getContext())) {
+            emitter.onError(new InitializationException("Can NOT initialize. InAppBillingService is not available."));
+            return;
+        }
+
         final boolean mainThread = isMainThread();
 
         final Semaphore semaphore = mainThread ? null : new Semaphore(0);
