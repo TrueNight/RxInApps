@@ -46,6 +46,8 @@ import io.reactivex.functions.Cancellable;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.functions.Predicate;
+import io.reactivex.subjects.PublishSubject;
+import io.reactivex.subjects.Subject;
 import xyz.truenight.rxinapps.exception.ProductNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
@@ -88,6 +90,7 @@ public class RxInApps extends ContextHolder {
     private final Storage storage;
     private final long cacheLifetime;
     private final Parser parser;
+    private final Subject<Integer> purchasesChanged;
 
     private final AtomicReference<SingleEmitter<Purchase>> purchaseSubscriber = new AtomicReference<>();
     private final Observable<IInAppBillingService> connection = Observable.create(ConnectionOnSubscribe.create(RxInApps.this))
@@ -113,6 +116,7 @@ public class RxInApps extends ContextHolder {
         this.packageName = getContext().getApplicationContext().getPackageName();
 
         this.storage = builder.getStorage();
+        purchasesChanged = PublishSubject.<Integer>create().toSerialized();
     }
 
     Parser getParser() {
@@ -210,7 +214,7 @@ public class RxInApps extends ContextHolder {
         return Single.create(PurchasedOnSubscribe.create(billingService, packageName, parser, productType));
     }
 
-    private Single<Map<String, Purchase>> purchasesByTypeMap(final String productType) {
+    private Observable<Map<String, Purchase>> purchasesByTypeMap(final String productType) {
         return Single.defer(new Callable<SingleSource<? extends Map<String, Purchase>>>() {
             @Override
             public SingleSource<? extends Map<String, Purchase>> call() throws Exception {
@@ -224,6 +228,16 @@ public class RxInApps extends ContextHolder {
                 }
                 return loadPurchasesByType(productType)
                         .compose(toMapAndCache(productType));
+            }
+        }).toObservable().repeatWhen(new Function<Observable<Object>, ObservableSource<?>>() {
+            @Override
+            public ObservableSource<?> apply(Observable<Object> objectObservable) throws Exception {
+                return objectObservable.flatMap(new Function<Object, ObservableSource<?>>() {
+                    @Override
+                    public ObservableSource<?> apply(Object o) throws Exception {
+                        return purchasesChanged;
+                    }
+                });
             }
         });
     }
@@ -251,6 +265,7 @@ public class RxInApps extends ContextHolder {
                             public void accept(Map<String, Purchase> map) throws Exception {
                                 storage.put(productType, map);
                                 storage.put(productType + LAST_LOAD, System.currentTimeMillis());
+                                purchasesChanged.onNext(0);
                             }
                         });
             }
@@ -264,14 +279,17 @@ public class RxInApps extends ContextHolder {
         }
         map.put(purchase.getProductId(), purchase);
         storage.put(productType, map);
+        purchasesChanged.onNext(0);
     }
 
     void removePurchaseFromCache(String productId, String productType) {
         Map<String, Purchase> map = storage.get(productType);
         if (map != null) {
-            map.remove(productId);
-            storage.put(productType, map);
+            if (map.remove(productId) != null) {
+                storage.put(productType, map);
+            }
         }
+        purchasesChanged.onNext(0);
     }
 
     boolean checkPurchaseSubscriber() {
@@ -369,14 +387,14 @@ public class RxInApps extends ContextHolder {
     /**
      * Loads or takes from cache purchased products and maps them by product id
      */
-    public Single<Map<String, Purchase>> purchasedProductsMap() {
+    public Observable<Map<String, Purchase>> purchasedProductsMap() {
         return purchasesByTypeMap(ProductType.MANAGED);
     }
 
     /**
      * Loads or takes from cache purchased products and emits them as {@link List}
      */
-    public Single<List<Purchase>> purchasedProducts() {
+    public Observable<List<Purchase>> purchasedProducts() {
         return purchasedProductsMap()
                 .map(new Function<Map<String, Purchase>, List<Purchase>>() {
                     @Override
@@ -389,7 +407,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Loads or takes from cache purchased product's ids and emits them
      */
-    public Single<List<String>> purchasedProductIds() {
+    public Observable<List<String>> purchasedProductIds() {
         return purchasedProductsMap()
                 .map(new Function<Map<String, Purchase>, List<String>>() {
                     @Override
@@ -402,7 +420,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Emits whether product with specified id purchased or not
      */
-    public Single<Boolean> isPurchased(final String productId) {
+    public Observable<Boolean> isPurchased(final String productId) {
         return purchasedProductsMap()
                 .map(new Function<Map<String, Purchase>, Boolean>() {
                     @Override
@@ -415,7 +433,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Emits purchased product with specified id OR error if purchase not found
      */
-    public Single<Purchase> getPurchasedProduct(final String productId) {
+    public Observable<Purchase> getPurchasedProduct(final String productId) {
         return purchasedProductsMap()
                 .map(new Function<Map<String, Purchase>, Purchase>() {
                     @Override
@@ -500,14 +518,14 @@ public class RxInApps extends ContextHolder {
     /**
      * Loads or takes from cache purchased subscriptions and maps them by product id
      */
-    public Single<Map<String, Purchase>> purchasedSubscriptionsMap() {
+    public Observable<Map<String, Purchase>> purchasedSubscriptionsMap() {
         return purchasesByTypeMap(ProductType.SUBSCRIPTION);
     }
 
     /**
      * Loads or takes from cache purchased subscriptions and emits them as {@link List}
      */
-    public Single<List<Purchase>> purchasedSubscriptions() {
+    public Observable<List<Purchase>> purchasedSubscriptions() {
         return purchasedSubscriptionsMap()
                 .map(new Function<Map<String, Purchase>, List<Purchase>>() {
                     @Override
@@ -520,7 +538,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Loads or takes from cache purchased subscription's ids and emits them
      */
-    public Single<List<String>> purchasedSubscriptionIds() {
+    public Observable<List<String>> purchasedSubscriptionIds() {
         return purchasedSubscriptionsMap()
                 .map(new Function<Map<String, Purchase>, List<String>>() {
                     @Override
@@ -533,7 +551,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Emits whether subscription with specified id purchased or not
      */
-    public Single<Boolean> isSubscribed(final String productId) {
+    public Observable<Boolean> isSubscribed(final String productId) {
         return purchasedSubscriptionsMap()
                 .map(new Function<Map<String, Purchase>, Boolean>() {
                     @Override
@@ -546,7 +564,7 @@ public class RxInApps extends ContextHolder {
     /**
      * Emits purchased subscription with specified id OR error if purchase not found
      */
-    public Single<Purchase> getPurchasedSubscription(final String productId) {
+    public Observable<Purchase> getPurchasedSubscription(final String productId) {
         return purchasedSubscriptionsMap()
                 .map(new Function<Map<String, Purchase>, Purchase>() {
                     @Override
