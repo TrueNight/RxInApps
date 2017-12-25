@@ -19,7 +19,6 @@ package xyz.truenight.rxinapps;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -64,7 +63,7 @@ public class HiddenActivity extends Activity {
         try {
             startIntentSenderForResult(pendingIntent.getIntentSender(),
                     PURCHASE_FLOW_REQUEST_CODE, new Intent(), 0, 0, 0);
-        } catch (IntentSender.SendIntentException e) {
+        } catch (Exception e) {
             rxInApps.deliverPurchaseError(e);
             super.finish();
         }
