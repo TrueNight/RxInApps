@@ -79,9 +79,9 @@ public class RxInApps extends ContextHolder {
         merchantId = builder.getMerchantId();
     }
 
-    public static synchronized RxInApps with(Context context) {
+    public static synchronized RxInApps get() {
         if (instance == null) {
-            instance = new RxInApps(new Builder(context));
+            throw new IllegalStateException("Instance should be initialized via init(Builder) before call get()");
         }
         return instance;
     }
