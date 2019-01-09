@@ -52,7 +52,7 @@ public class HiddenActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         PendingIntent pendingIntent = getIntent().getParcelableExtra(Constants.BUY_INTENT);
-        RxInApps rxInApps = RxInApps.with(this);
+        RxInApps rxInApps = RxInApps.get();
 
         if (!rxInApps.bindPurchaseUnsubscribe(Subscriptions.create(new Action0() {
             @Override
@@ -87,7 +87,7 @@ public class HiddenActivity extends Activity {
             return false;
         }
 
-        RxInApps rxInApps = RxInApps.with(this);
+        RxInApps rxInApps = RxInApps.get();
 
         if (rxInApps.checkPurchaseSubscriber()) {
             Log.e(TAG, "", new InAppBillingException("Subscriber for purchase is unsubscribed or NULL"));
@@ -216,7 +216,7 @@ public class HiddenActivity extends Activity {
 
     @Override
     public void finish() {
-        RxInApps.with(this).deliverPurchaseError(new PurchaseCanceledException());
+        RxInApps.get().deliverPurchaseError(new PurchaseCanceledException());
         super.finish();
     }
 }

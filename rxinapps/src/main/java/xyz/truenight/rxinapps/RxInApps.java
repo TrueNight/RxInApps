@@ -27,9 +27,11 @@ import com.android.vending.billing.IInAppBillingService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import rx.Emitter;
@@ -40,6 +42,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.functions.Func2;
 import xyz.truenight.rxinapps.exception.ProductNotFoundException;
 import xyz.truenight.rxinapps.model.ProductType;
 import xyz.truenight.rxinapps.model.Purchase;
@@ -71,9 +74,9 @@ public class RxInApps extends ContextHolder {
         merchantId = builder.getMerchantId();
     }
 
-    public static synchronized RxInApps with(Context context) {
+    public static synchronized RxInApps get() {
         if (instance == null) {
-            instance = new RxInApps(new Builder(context));
+            throw new IllegalStateException("Instance should be initialized via init(Builder) before call get()");
         }
         return instance;
     }
@@ -86,7 +89,12 @@ public class RxInApps extends ContextHolder {
     private final Observable<IInAppBillingService> connection = Observable.create(
             ConnectionOnSubscribe.create(this), Emitter.BackpressureMode.NONE)
             .timeout(10, TimeUnit.SECONDS)
-            .retry().first().share();
+            .retry(new Func2<Integer, Throwable, Boolean>() {
+                @Override
+                public Boolean call(Integer integer, Throwable throwable) {
+                    return throwable instanceof TimeoutException;
+                }
+            }).first().share();
 
     private final AtomicReference<Subscriber<? super Purchase>> purchaseSubscriber = new AtomicReference<>();
 
@@ -244,14 +252,19 @@ public class RxInApps extends ContextHolder {
 
     void putPurchaseToCache(Purchase purchase, String productType) {
         Map<String, Purchase> map = storage.get(productType);
+        if (map == null) {
+            map = new HashMap<>();
+        }
         map.put(purchase.getProductId(), purchase);
         storage.put(productType, map);
     }
 
     void removePurchaseFromCache(String productId, String productType) {
         Map<String, Purchase> map = storage.get(productType);
-        map.remove(productId);
-        storage.put(productType, map);
+        if (map != null) {
+            map.remove(productId);
+            storage.put(productType, map);
+        }
     }
 
     boolean checkPurchaseSubscriber() {
